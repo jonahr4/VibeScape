@@ -15,10 +15,10 @@ export async function GET(req: NextRequest) {
 
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:9002/api/auth/spotify/callback';
+  const redirectUri = process.env.SPOTIFY_REDIRECT_URI;
 
-  if (!clientId || !clientSecret) {
-    console.error('Spotify client ID or secret is not set.');
+  if (!clientId || !clientSecret || !redirectUri) {
+    console.error('Spotify credentials are not fully set in environment variables.');
     return NextResponse.redirect(new URL('/login?error=config_error', req.url));
   }
 
@@ -41,13 +41,14 @@ export async function GET(req: NextRequest) {
 
     if (!response.ok) {
       console.error('Spotify token error:', data);
-      return NextResponse.redirect(new URL(`/login?error=${data.error_description || 'invalid_token'}`, req.url));
+      const errorMessage = data.error_description || data.error || 'invalid_token';
+      return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(errorMessage)}`, req.url));
     }
 
     const { access_token, refresh_token, expires_in } = data;
 
-    cookies().set('spotify_access_token', access_token, { httpOnly: true, path: '/', maxAge: expires_in });
-    cookies().set('spotify_refresh_token', refresh_token, { httpOnly: true, path: '/' });
+    cookies().set('spotify_access_token', access_token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/', maxAge: expires_in });
+    cookies().set('spotify_refresh_token', refresh_token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/' });
     
     // Redirect to the main page after successful login
     return NextResponse.redirect(new URL('/', req.url));

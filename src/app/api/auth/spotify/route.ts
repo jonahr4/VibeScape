@@ -13,13 +13,14 @@ function generateRandomString(length: number) {
 
 export async function GET() {
   const clientId = process.env.SPOTIFY_CLIENT_ID;
-  if (!clientId) {
-    throw new Error('SPOTIFY_CLIENT_ID is not set in environment variables');
+  const redirectUri = process.env.SPOTIFY_REDIRECT_URI;
+  
+  if (!clientId || !redirectUri) {
+    throw new Error('Spotify credentials are not set in environment variables');
   }
 
   const state = generateRandomString(16);
   const scope = 'user-read-private user-read-email playlist-read-private';
-  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:9002/api/auth/spotify/callback';
 
   cookies().set('spotify_auth_state', state, { httpOnly: true, path: '/' });
 
