@@ -99,7 +99,7 @@ export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[],
               id: track.id,
               name: track.name,
               artist: track.artists.map((a: any) => a.name).join(', '),
-              albumArt: track.album.images[0]?.url || null,
+              albumArt: track.album?.images?.[0]?.url || null, // FIX: Safely access album art
               popularity: track.popularity,
               playlists: [playlist.id],
             };
