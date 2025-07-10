@@ -1,16 +1,16 @@
 // src/services/spotify.ts
 'use server';
 
-import { cookies } from 'next/headers';
 import type { Playlist, Song } from '@/types/spotify';
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
 async function fetchSpotify(endpoint: string) {
-  const accessToken = cookies().get('spotify_access_token')?.value;
+  // We now get the access token directly from environment variables
+  const accessToken = process.env.SPOTIFY_ACCESS_TOKEN;
 
   if (!accessToken) {
-    throw new Error('Not authenticated with Spotify');
+    throw new Error('Spotify Access Token is not set in .env file. Please get a token and add it.');
   }
 
   const response = await fetch(`${SPOTIFY_API_BASE}${endpoint}`, {
@@ -20,9 +20,13 @@ async function fetchSpotify(endpoint: string) {
   });
 
   if (!response.ok) {
-    // Basic error handling. In a real app, you might want to handle token refreshing.
     const error = await response.json();
     console.error(`Spotify API Error for ${endpoint}:`, error);
+    
+    if (response.status === 401) {
+        throw new Error('Spotify API Error: The Access Token is invalid or has expired. Please get a new one.');
+    }
+    
     throw new Error(`Spotify API Error: ${error.error?.message || response.statusText}`);
   }
 
