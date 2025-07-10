@@ -14,11 +14,11 @@ import {
 
 // Mock Data
 const playlists = [
-  { id: 'p1', name: 'Ambient Focus', color: 'rgba(233, 30, 99, 0.25)' },
-  { id: 'p2', name: 'Late Night Jazz', color: 'rgba(103, 58, 183, 0.25)' },
-  { id: 'p3', name: 'Indie Workout', color: 'rgba(0, 150, 136, 0.25)' },
-  { id: 'p4', name: 'Summer Hits', color: 'rgba(255, 193, 7, 0.25)' },
-  { id: 'p5', name: 'Coding Flow', color: 'rgba(3, 169, 244, 0.25)' },
+  { id: 'p1', name: 'Ambient Focus', color: 'rgba(233, 30, 99, 0.25)', lineColor: 'rgba(233, 30, 99, 0.5)' },
+  { id: 'p2', name: 'Late Night Jazz', color: 'rgba(103, 58, 183, 0.25)', lineColor: 'rgba(103, 58, 183, 0.5)' },
+  { id: 'p3', name: 'Indie Workout', color: 'rgba(0, 150, 136, 0.25)', lineColor: 'rgba(0, 150, 136, 0.5)' },
+  { id: 'p4', name: 'Summer Hits', color: 'rgba(255, 193, 7, 0.25)', lineColor: 'rgba(255, 193, 7, 0.5)' },
+  { id: 'p5', name: 'Coding Flow', color: 'rgba(3, 169, 244, 0.25)', lineColor: 'rgba(3, 169, 244, 0.5)' },
 ];
 
 const songs = [
@@ -93,6 +93,32 @@ const SongMap = () => {
     return positions;
   }, [playlistPositions]);
   
+  const connections = useMemo(() => {
+    const lines: { start: Vector2D; end: Vector2D; key: string, color: string }[] = [];
+    const songMap = new Map(songs.map(s => [s.id, s]));
+
+    playlists.forEach(playlist => {
+      const playlistSongs = songs.filter(s => s.playlists.includes(playlist.id));
+      for (let i = 0; i < playlistSongs.length; i++) {
+        for (let j = i + 1; j < playlistSongs.length; j++) {
+          const songA = playlistSongs[i];
+          const songB = playlistSongs[j];
+          const posA = songPositions[songA.id];
+          const posB = songPositions[songB.id];
+          if (posA && posB) {
+            lines.push({
+              start: posA,
+              end: posB,
+              key: `${playlist.id}-${songA.id}-${songB.id}`,
+              color: playlist.lineColor
+            });
+          }
+        }
+      }
+    });
+    return lines;
+  }, [songPositions]);
+
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const scaleAmount = -e.deltaY * 0.001;
@@ -171,6 +197,22 @@ const SongMap = () => {
               transformOrigin: '0 0',
             }}
           >
+            <svg width={MAP_SIZE} height={MAP_SIZE} className="absolute top-0 left-0 pointer-events-none">
+              <g>
+                {connections.map(conn => (
+                  <line 
+                    key={conn.key} 
+                    x1={conn.start.x} 
+                    y1={conn.start.y} 
+                    x2={conn.end.x} 
+                    y2={conn.end.y} 
+                    stroke={conn.color} 
+                    strokeWidth="2" 
+                  />
+                ))}
+              </g>
+            </svg>
+
             <TooltipProvider>
             {playlists.map(p => {
               const pos = playlistPositions[p.id];
