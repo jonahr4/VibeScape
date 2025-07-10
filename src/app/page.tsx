@@ -2,6 +2,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import SongMap from "@/components/song-map"
 import PlaylistChooser from "@/components/playlist-chooser"
 import { Music, Star } from "lucide-react"
+import { Suspense } from "react"
+import { Skeleton } from "@/components/ui/skeleton"
+
+function SongMapSkeleton() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-8 w-1/3" />
+      <Skeleton className="h-6 w-2/3" />
+      <Skeleton className="h-[60vh] w-full" />
+    </div>
+  )
+}
 
 export default function Home() {
   return (
@@ -17,7 +29,9 @@ export default function Home() {
             <TabsTrigger value="playlist-chooser"><Star className="mr-2 h-4 w-4" />Playlist Chooser</TabsTrigger>
           </TabsList>
           <TabsContent value="song-map" className="mt-6">
-            <SongMap />
+             <Suspense fallback={<SongMapSkeleton />}>
+                <SongMap />
+            </Suspense>
           </TabsContent>
           <TabsContent value="playlist-chooser" className="mt-6">
             <PlaylistChooser />
