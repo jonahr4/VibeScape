@@ -28,7 +28,7 @@ export async function GET() {
   authUrl.searchParams.append('client_id', clientId);
   authUrl.searchParams.append('scope', scope);
   authUrl.searchParams.append('redirect_uri', redirectUri);
-  authUrl.search_params.append('state', state);
+  authUrl.searchParams.append('state', state);
 
   return NextResponse.redirect(authUrl);
 }
