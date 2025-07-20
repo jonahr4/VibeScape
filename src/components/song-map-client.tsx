@@ -106,7 +106,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     if (!isClient) return {};
 
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 4000;
+    const JITTER_STRENGTH = 6000;
     songs.forEach(song => {
       const parentPlaylists = song.playlists
         .map(pid => playlistPositions[pid])
