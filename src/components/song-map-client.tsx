@@ -27,6 +27,7 @@ const MAP_SIZE = 4000;
 
 type Vector2D = { x: number; y: number; };
 type Transform = { x: number; y: number; scale: number; };
+type Selection = { type: 'song' | 'playlist'; id: string } | null;
 
 interface SongMapClientProps {
   allPlaylists: Playlist[];
@@ -39,7 +40,8 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState<Vector2D>({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
-  const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>(null);
+
 
   // State for playlist selection
   const [selectedPlaylists, setSelectedPlaylists] = useState<Record<string, boolean>>(() => {
@@ -163,22 +165,41 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   }, [songPositions, playlists, songs]);
   
   const selectionDetails = useMemo(() => {
-    if (!selectedSongId) return null;
-    const selectedSong = songs.find(s => s.id === selectedSongId);
-    if (!selectedSong) return null;
+    if (!selection) return null;
 
-    const connectedPlaylistIds = new Set(selectedSong.playlists);
+    if (selection.type === 'song') {
+      const selectedSong = songs.find(s => s.id === selection.id);
+      if (!selectedSong) return null;
+
+      const connectedPlaylistIds = new Set(selectedSong.playlists);
+      const connectedSongIds = new Set<string>([selectedSong.id]);
+
+      // Highlight songs that share ANY playlist with the selected song
+      songs.forEach(song => {
+        if (song.playlists.some(pid => connectedPlaylistIds.has(pid))) {
+          connectedSongIds.add(song.id);
+        }
+      });
+      return { connectedSongIds, connectedPlaylistIds, isSongSelection: true };
+    }
+
+    if (selection.type === 'playlist') {
+        const selectedPlaylistId = selection.id;
+        const connectedPlaylistIds = new Set<string>([selectedPlaylistId]);
+        const connectedSongIds = new Set<string>();
+        
+        // Highlight songs ONLY in this playlist
+        songs.forEach(song => {
+            if (song.playlists.includes(selectedPlaylistId)) {
+                connectedSongIds.add(song.id);
+            }
+        });
+
+        return { connectedSongIds, connectedPlaylistIds, isSongSelection: false };
+    }
     
-    const connectedSongIds = new Set([selectedSongId]);
-    songs.forEach(song => {
-      // Find all songs that are in ANY of the same playlists as the selected song.
-      if (song.playlists.some(pid => connectedPlaylistIds.has(pid))) {
-        connectedSongIds.add(song.id);
-      }
-    });
-
-    return { selectedSong, connectedPlaylistIds, connectedSongIds };
-  }, [selectedSongId, songs, playlists]);
+    return null;
+  }, [selection, songs]);
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -198,30 +219,37 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Prevent pan start if clicking on a song node or filter card
-    if ((e.target as HTMLElement).closest('[data-song-node]') || (e.target as HTMLElement).closest('[data-filter-card]')) {
+    if ((e.target as HTMLElement).closest('[data-interactive-node]')) {
       return;
     }
     setIsPanning(true);
-    setStartPan({ x: e.clientX - transform.x, y: e.clientY - transform.y });
+    setStartPan({ x: e.clientX, y: e.clientY });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isPanning) return;
-    setTransform(t => ({ ...t, x: e.clientX - startPan.x, y: e.clientY - startPan.y }));
+    setTransform(t => ({ ...t, x: t.x + e.clientX - startPan.x, y: t.y + e.clientY - startPan.y }));
+    setStartPan({ x: e.clientX, y: e.clientY });
   };
   
   const handleMouseUp = (e: React.MouseEvent) => {
     // If it was a pan, don't deselect. A simple click won't have a large delta.
-    const movedDistance = Math.hypot(e.clientX - startPan.x - transform.x, e.clientY - startPan.y - transform.y);
-    if (isPanning && movedDistance < 5 && !(e.target as HTMLElement).closest('[data-song-node]')) {
-      setSelectedSongId(null);
+    const panThreshold = 5;
+    const movedDistance = Math.hypot(e.clientX - startPan.x, e.clientY - startPan.y);
+    if (isPanning && movedDistance < panThreshold && !(e.target as HTMLElement).closest('[data-interactive-node]')) {
+      setSelection(null);
     }
     setIsPanning(false);
   };
   
-  const handleSongClick = (songId: string) => {
-    setSelectedSongId(prevId => (prevId === songId ? null : songId));
+  const handleSongClick = (songId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelection(prev => (prev?.type === 'song' && prev.id === songId) ? null : { type: 'song', id: songId });
+  }
+
+  const handlePlaylistClick = (playlistId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelection(prev => (prev?.type === 'playlist' && prev.id === playlistId) ? null : { type: 'playlist', id: playlistId });
   }
 
   const zoom = (direction: 'in' | 'out') => {
@@ -248,12 +276,13 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     const newX = -MAP_SIZE/2*newScale + rect.width/2;
     const newY = -MAP_SIZE/2*newScale + rect.height/2;
     setTransform({ scale: newScale, x: newX, y: newY });
-    setSelectedSongId(null);
+    setSelection(null);
   }
 
   const handleApplyFilters = () => {
     setSelectedPlaylists(stagedSelectedPlaylists);
     setSongCountFilter(stagedSongCountFilter[0]);
+    setSelection(null);
   }
 
 
@@ -327,7 +356,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                     <div className="w-8 h-8 rounded-full bg-primary/20 flex-shrink-0 mt-1"></div>
                     <div>
                         <h3 className="font-semibold text-foreground">Playlists</h3>
-                        <p>The large, colored circles represent your playlists. Songs are clustered around the playlists they belong to.</p>
+                        <p>The large, colored circles represent your playlists. Songs are clustered around the playlists they belong to. Click a playlist to see its songs.</p>
                     </div>
                 </div>
                  <div className="flex items-start gap-4">
@@ -399,7 +428,14 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         <svg width={MAP_SIZE} height={MAP_SIZE} className="absolute top-0 left-0 pointer-events-none">
           <g>
             {connections.map(conn => {
-              const isVisible = !selectionDetails || (selectionDetails.connectedSongIds.has(conn.songIds[0]) && selectionDetails.connectedSongIds.has(conn.songIds[1]));
+              let isVisible = !selectionDetails;
+              if (selectionDetails) {
+                 if (selectionDetails.isSongSelection) {
+                    isVisible = selectionDetails.connectedSongIds.has(conn.songIds[0]) && selectionDetails.connectedSongIds.has(conn.songIds[1]);
+                 } else {
+                    isVisible = selectionDetails.connectedSongIds.has(conn.songIds[0]) && selectionDetails.connectedSongIds.has(conn.songIds[1]);
+                 }
+              }
               
               return (
                 <line 
@@ -427,9 +463,12 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
           return (
               <div
                 key={p.id}
+                data-interactive-node
+                onClick={(e) => handlePlaylistClick(p.id, e)}
                 className={cn(
-                    "absolute rounded-full flex items-center justify-center pointer-events-none transition-opacity duration-300",
-                    isVisible ? "opacity-100" : "opacity-20"
+                    "absolute rounded-full flex items-center justify-center transition-opacity duration-300 cursor-pointer",
+                    isVisible ? "opacity-100" : "opacity-20",
+                    "hover:border-primary-foreground"
                 )}
                 style={{
                   left: pos.x,
@@ -442,7 +481,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                 }}
               >
                   <span 
-                    className="font-bold text-foreground/80 text-center"
+                    className="font-bold text-foreground/80 text-center pointer-events-none"
                     style={{ fontSize: `0.75rem`}}
                   >
                     {p.name}
@@ -457,14 +496,14 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
           if (!pos) return null;
 
           const isVisible = !selectionDetails || selectionDetails.connectedSongIds.has(song.id);
-          const isSelected = song.id === selectedSongId;
+          const isSelected = selection?.type === 'song' && song.id === selection.id;
 
           return (
             <Tooltip key={song.id} delayDuration={100}>
               <TooltipTrigger asChild>
                   <div
-                    data-song-node
-                    onClick={() => handleSongClick(song.id)}
+                    data-interactive-node
+                    onClick={(e) => handleSongClick(song.id, e)}
                     className={cn(
                         "absolute rounded-full shadow-lg transition-all duration-300",
                         isVisible ? "opacity-100" : "opacity-20",
