@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw } from 'lucide-react';
+import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -19,6 +19,8 @@ import type { Playlist, Song } from '@/types/spotify';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Slider } from '@/components/ui/slider';
 
 const MAP_SIZE = 4000;
 
@@ -48,16 +50,27 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   });
   
   const [stagedSelectedPlaylists, setStagedSelectedPlaylists] = useState(selectedPlaylists);
+  
+  // State for song filter
+  const [songCountFilter, setSongCountFilter] = useState(100);
+  const [stagedSongCountFilter, setStagedSongCountFilter] = useState([100]);
+
 
   // Filter playlists and songs based on selection
-  const { playlists, songs } = useMemo(() => {
+  const { playlists, songs, maxSongs } = useMemo(() => {
     const activePlaylists = allPlaylists.filter(p => selectedPlaylists[p.id]);
     const activePlaylistIds = new Set(activePlaylists.map(p => p.id));
-    const activeSongs = allSongs.filter(s => 
+    
+    const songsInSelectedPlaylists = allSongs.filter(s => 
       s.playlists.some(pid => activePlaylistIds.has(pid))
     );
-    return { playlists: activePlaylists, songs: activeSongs };
-  }, [allPlaylists, allSongs, selectedPlaylists]);
+    
+    const sortedSongs = [...songsInSelectedPlaylists].sort((a, b) => b.popularity - a.popularity);
+    const maxSongs = sortedSongs.length;
+    const filteredSongs = sortedSongs.slice(0, songCountFilter);
+
+    return { playlists: activePlaylists, songs: filteredSongs, maxSongs };
+  }, [allPlaylists, allSongs, selectedPlaylists, songCountFilter]);
 
 
   useEffect(() => {
@@ -68,6 +81,13 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
       setTransform(t => ({...t, x: -MAP_SIZE/2*t.scale + rect.width/2, y: -MAP_SIZE/2*t.scale + rect.height/2}));
     }
   }, []);
+
+  useEffect(() => {
+    // If the filter is set higher than the max number of available songs, reset it.
+    if (stagedSongCountFilter[0] > maxSongs) {
+      setStagedSongCountFilter([maxSongs]);
+    }
+  }, [maxSongs, stagedSongCountFilter]);
 
   const playlistPositions = useMemo(() => {
     const positions: Record<string, Vector2D> = {};
@@ -86,7 +106,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     if (!isClient) return {};
 
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 800; // Increased jitter
+    const JITTER_STRENGTH = 1000;
     songs.forEach(song => {
       const parentPlaylists = song.playlists
         .map(pid => playlistPositions[pid])
@@ -153,6 +173,10 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Ignore pan events on the filter card
+    if ((e.target as HTMLElement).closest('[data-filter-card]')) {
+      return;
+    }
     setIsPanning(true);
     setStartPan({ x: e.clientX - transform.x, y: e.clientY - transform.y });
   };
@@ -190,6 +214,10 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     setTransform({ scale: newScale, x: newX, y: newY });
   }
 
+  const handleApplyFilters = () => {
+    setSongCountFilter(stagedSongCountFilter[0]);
+  }
+
 
   return (
     <div 
@@ -201,7 +229,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      <div className="absolute top-2 left-2 z-20 flex gap-2">
+       <div className="absolute top-2 left-2 z-20 flex flex-wrap gap-2">
         <Button size="icon" variant="secondary" onClick={() => zoom('in')}><Plus /></Button>
         <Button size="icon" variant="secondary" onClick={() => zoom('out')}><Minus /></Button>
         <Button size="icon" variant="secondary" onClick={resetView}><Maximize /></Button>
@@ -291,6 +319,37 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
           </DialogContent>
         </Dialog>
       </div>
+
+       <div className="absolute top-2 right-2 z-20 w-64" data-filter-card>
+        <Card>
+          <CardHeader className="p-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Filter className="w-4 h-4" />
+              Filters
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-4">
+              <div>
+                <Label htmlFor="song-count-slider" className="text-sm">
+                  Show Top {stagedSongCountFilter[0]} Songs
+                </Label>
+                <div className="flex items-center gap-2">
+                    <Slider
+                      id="song-count-slider"
+                      min={1}
+                      max={maxSongs > 1 ? maxSongs : 1}
+                      step={1}
+                      value={stagedSongCountFilter}
+                      onValueChange={setStagedSongCountFilter}
+                      disabled={maxSongs <= 1}
+                    />
+                </div>
+              </div>
+              <Button onClick={handleApplyFilters} className="w-full" size="sm">Apply</Button>
+          </CardContent>
+        </Card>
+      </div>
+
       <div
         className="absolute"
         style={{
@@ -349,7 +408,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 15 + Math.pow(song.popularity / 100, 2) * 250;
+          const size = 15 + Math.pow(song.popularity / 100, 2) * 400;
           if (!pos) return null;
 
           return (
