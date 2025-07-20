@@ -10,8 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2 } from "lucide-react"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Loader2, ExternalLink } from "lucide-react"
+import Image from "next/image"
+import { format } from 'date-fns'
 
 const formSchema = z.object({
   mood: z.string().min(2, {
@@ -54,7 +55,7 @@ export default function PlaylistChooser() {
       <Card>
         <CardHeader>
           <CardTitle>AI Playlist Chooser</CardTitle>
-          <CardDescription>Tell us your mood, and we'll find the perfect playlist for you from your library.</CardDescription>
+          <CardDescription>Tell us your vibe, and we'll find the perfect playlist for you from your library.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -88,26 +89,41 @@ export default function PlaylistChooser() {
       )}
 
       {recommendations.length > 0 && (
-        <Card>
-          <CardHeader>
+        <div>
+          <CardHeader className="px-0">
             <CardTitle>Your Playlist Recommendations</CardTitle>
             <CardDescription>Here are the top 3 playlists that match your mood.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Accordion type="single" collapsible className="w-full">
+          <div className="grid gap-6">
               {recommendations.map((rec, index) => (
-                <AccordionItem value={`item-${index}`} key={index}>
-                  <AccordionTrigger className="text-lg font-semibold text-left">
-                    {index + 1}. {rec.playlistName}
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <p className="text-muted-foreground">{rec.explanation}</p>
-                  </AccordionContent>
-                </AccordionItem>
+                <Card key={index} className="overflow-hidden">
+                  <div className="flex gap-4">
+                    <Image 
+                      src={rec.albumArt || 'https://placehold.co/128x128.png'} 
+                      alt={`Cover for ${rec.name}`}
+                      data-ai-hint="playlist music"
+                      width={128} 
+                      height={128}
+                      className="object-cover w-32 h-32" 
+                    />
+                    <div className="p-4 flex flex-col flex-1">
+                      <div className="flex justify-between items-start">
+                        <h3 className="text-lg font-bold">{rec.name}</h3>
+                        <a href={rec.href} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
+                          <ExternalLink className="h-5 w-5" />
+                        </a>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-2 flex-1">{rec.explanation}</p>
+                      <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                        {rec.dateCreated && <div>Created: {format(new Date(rec.dateCreated), 'yyyy')}</div>}
+                        {rec.lastModified && <div>Modified: {format(new Date(rec.lastModified), 'MMM yyyy')}</div>}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
               ))}
-            </Accordion>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   )
