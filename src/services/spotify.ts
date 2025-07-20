@@ -55,6 +55,10 @@ function assignColor(index: number) {
 }
 
 export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[], songs: Song[] }> {
+  // First, get the current user's profile to know their ID
+  const userProfile = await fetchSpotify('/me');
+  const userId = userProfile.id;
+
   const playlistData = await fetchSpotify('/me/playlists?limit=50');
   
   if (!playlistData || !Array.isArray(playlistData.items)) {
@@ -62,10 +66,13 @@ export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[],
     throw new Error('Failed to fetch playlists: The data format from Spotify was not as expected.');
   }
 
+  // Filter playlists to only include those owned by the user or collaborative playlists
+  const userOwnedOrCollaborativePlaylists = playlistData.items.filter((p: any) => p.owner.id === userId || p.collaborative);
+
   const songsMap = new Map<string, Song>();
   const playlistDateInfo: Record<string, { earliest: string | null, latest: string | null }> = {};
 
-  const playlists: Playlist[] = playlistData.items.map((p: any, index: number): Omit<Playlist, 'dateCreated' | 'lastModified'> => {
+  const playlists: Playlist[] = userOwnedOrCollaborativePlaylists.map((p: any, index: number): Omit<Playlist, 'dateCreated' | 'lastModified'> => {
       const color = assignColor(index);
       playlistDateInfo[p.id] = { earliest: null, latest: null };
       return {
