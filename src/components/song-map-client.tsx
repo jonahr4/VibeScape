@@ -1,7 +1,7 @@
 // src/components/song-map-client.tsx
 "use client";
 
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,17 +22,30 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 const MAP_SIZE = 4000;
 
 type Vector2D = { x: number; y: number; };
 type Transform = { x: number; y: number; scale: number; };
 type Selection = { type: 'song' | 'playlist'; id: string } | null;
+type FilterMode = "top" | "random";
 
 interface SongMapClientProps {
   allPlaylists: Playlist[];
   allSongs: Song[];
 }
+
+// Helper to shuffle an array
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
 
 const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -42,11 +55,9 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [isClient, setIsClient] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
 
-
   // State for playlist selection
   const [selectedPlaylists, setSelectedPlaylists] = useState<Record<string, boolean>>(() => {
     const initialState: Record<string, boolean> = {};
-    // Initially select the first 7 playlists
     allPlaylists.slice(0, 7).forEach(p => {
       initialState[p.id] = true;
     });
@@ -58,7 +69,8 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   // State for song filter
   const [songCountFilter, setSongCountFilter] = useState(100);
   const [stagedSongCountFilter, setStagedSongCountFilter] = useState([100]);
-
+  const [filterMode, setFilterMode] = useState<FilterMode>("top");
+  const [stagedFilterMode, setStagedFilterMode] = useState<FilterMode>("top");
 
   // Filter playlists and songs based on selection
   const { playlists, songs, maxSongs } = useMemo(() => {
@@ -69,17 +81,23 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
       s.playlists.some(pid => activePlaylistIds.has(pid))
     );
     
-    const sortedSongs = [...songsInSelectedPlaylists].sort((a, b) => b.popularity - a.popularity);
-    const maxSongs = sortedSongs.length;
-    const filteredSongs = sortedSongs.slice(0, songCountFilter);
+    const maxSongs = songsInSelectedPlaylists.length;
+    let filteredSongs: Song[];
+
+    if (filterMode === 'top') {
+      filteredSongs = [...songsInSelectedPlaylists]
+        .sort((a, b) => b.popularity - a.popularity)
+        .slice(0, songCountFilter);
+    } else { // random
+      filteredSongs = shuffleArray(songsInSelectedPlaylists).slice(0, songCountFilter);
+    }
 
     return { playlists: activePlaylists, songs: filteredSongs, maxSongs };
-  }, [allPlaylists, allSongs, selectedPlaylists, songCountFilter]);
+  }, [allPlaylists, allSongs, selectedPlaylists, songCountFilter, filterMode]);
 
 
   useEffect(() => {
     setIsClient(true);
-    // Center the view on initial load
     const rect = containerRef.current?.getBoundingClientRect();
     if(rect) {
       setTransform(t => ({...t, x: -MAP_SIZE/2*t.scale + rect.width/2, y: -MAP_SIZE/2*t.scale + rect.height/2}));
@@ -87,7 +105,6 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   }, []);
 
   useEffect(() => {
-    // If the filter is set higher than the max number of available songs, reset it.
     if (stagedSongCountFilter[0] > maxSongs) {
       setStagedSongCountFilter([maxSongs]);
     }
@@ -108,10 +125,9 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
 
   const songPositions = useMemo(() => {
     if (!isClient) return {};
-  
+    const JITTER_STRENGTH = 512;
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 640;
-  
+
     songs.forEach(song => {
       const parentPlaylistPos = song.playlists
         .map(pid => playlistPositions[pid])
@@ -174,7 +190,6 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
       const connectedPlaylistIds = new Set(selectedSong.playlists);
       const connectedSongIds = new Set<string>([selectedSong.id]);
 
-      // Highlight songs that share ANY playlist with the selected song
       songs.forEach(song => {
         if (song.playlists.some(pid => connectedPlaylistIds.has(pid))) {
           connectedSongIds.add(song.id);
@@ -188,7 +203,6 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         const connectedPlaylistIds = new Set<string>([selectedPlaylistId]);
         const connectedSongIds = new Set<string>();
         
-        // Highlight songs ONLY in this playlist
         songs.forEach(song => {
             if (song.playlists.includes(selectedPlaylistId)) {
                 connectedSongIds.add(song.id);
@@ -219,7 +233,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('[data-interactive-node]')) {
+    if ((e.target as HTMLElement).closest('[data-interactive-node]') || (e.target as HTMLElement).closest('[data-filter-card]')) {
       return;
     }
     setIsPanning(true);
@@ -233,9 +247,10 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   };
   
   const handleMouseUp = (e: React.MouseEvent) => {
-    // If it was a pan, don't deselect. A simple click won't have a large delta.
+    const startX = startPan.x;
+    const startY = startPan.y;
     const panThreshold = 5;
-    const movedDistance = Math.hypot(e.clientX - startPan.x, e.clientY - startPan.y);
+    const movedDistance = Math.hypot(e.clientX - startX, e.clientY - startY);
     if (isPanning && movedDistance < panThreshold && !(e.target as HTMLElement).closest('[data-interactive-node]')) {
       setSelection(null);
     }
@@ -282,6 +297,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const handleApplyFilters = () => {
     setSelectedPlaylists(stagedSelectedPlaylists);
     setSongCountFilter(stagedSongCountFilter[0]);
+    setFilterMode(stagedFilterMode);
     setSelection(null);
   }
 
@@ -394,9 +410,19 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
+              <RadioGroup value={stagedFilterMode} onValueChange={(value) => setStagedFilterMode(value as FilterMode)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="top" id="filter-top" />
+                  <Label htmlFor="filter-top">Top Songs</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="random" id="filter-random" />
+                  <Label htmlFor="filter-random">Random Songs</Label>
+                </div>
+              </RadioGroup>
               <div>
                 <Label htmlFor="song-count-slider" className="text-sm">
-                  Show Top {stagedSongCountFilter[0]} Songs
+                  Show {stagedSongCountFilter[0]} Songs
                 </Label>
                 <div className="flex items-center gap-2">
                     <Slider
@@ -432,7 +458,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
               if (selectionDetails) {
                  if (selectionDetails.isSongSelection) {
                     isVisible = selectionDetails.connectedSongIds.has(conn.songIds[0]) && selectionDetails.connectedSongIds.has(conn.songIds[1]);
-                 } else {
+                 } else { // is playlist selection
                     isVisible = selectionDetails.connectedSongIds.has(conn.songIds[0]) && selectionDetails.connectedSongIds.has(conn.songIds[1]);
                  }
               }
@@ -492,7 +518,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 120 + Math.pow(song.popularity / 100, 2) * 10;
+          const size = 60 + Math.pow(song.popularity / 100, 2) * 5;
           if (!pos) return null;
 
           const isVisible = !selectionDetails || selectionDetails.connectedSongIds.has(song.id);
