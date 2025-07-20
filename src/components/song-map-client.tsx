@@ -218,8 +218,8 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
                 }}
               >
                   <span 
-                    className="text-2xl font-bold text-foreground/80 text-center"
-                    style={{ fontSize: `${Math.max(1, 4 / transform.scale)}rem`}}
+                    className="font-bold text-foreground/80 text-center"
+                    style={{ fontSize: `${Math.max(1, 2.5 / transform.scale)}rem`}}
                   >
                     {p.name}
                   </span>
@@ -229,8 +229,8 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const popularity = Math.max(1, song.popularity / 25); // Scale popularity
-          const size = 32 + popularity * 4;
+          // Scale size based on popularity (0-100). More popular songs are larger.
+          const size = 20 + (song.popularity / 100) * 80;
           if (!pos) return null;
 
           return (
