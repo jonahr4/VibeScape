@@ -107,7 +107,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   
     const positions: Record<string, Vector2D> = {};
     // A much smaller, more controlled jitter value
-    const JITTER_STRENGTH = 250; 
+    const JITTER_STRENGTH = 400; 
   
     songs.forEach(song => {
       // Get the positions of playlists this song belongs to
@@ -416,7 +416,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 15 + Math.pow(song.popularity / 100, 2) * 40;
+          const size = 30 + Math.pow(song.popularity / 100, 2) * 80;
           if (!pos) return null;
 
           return (
