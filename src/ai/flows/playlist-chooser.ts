@@ -18,11 +18,8 @@ import type { Playlist, Song } from '@/types/spotify';
 // == Main Public-Facing Function and Types =================================
 // These are the primary exports used by the application UI.
 
-export type ProgressCallback = (step: number, description: string) => void;
-
 export type PlaylistChooserInput = {
   mood: string;
-  progressCallback?: ProgressCallback;
 };
 
 const PlaylistRecommendationSchema = z.object({
@@ -44,15 +41,14 @@ export type PlaylistChooserOutput = z.infer<typeof PlaylistChooserOutputSchema>;
 
 /**
  * Recommends 3 playlists based on a user's mood using a hybrid AI and algorithmic approach.
- * @param {PlaylistChooserInput} input - The user's mood and an optional progress callback.
+ * @param {PlaylistChooserInput} input - The user's mood.
  * @returns {Promise<PlaylistChooserOutput>} A promise that resolves to the recommended playlists.
  */
-export async function playlistChooser({ mood, progressCallback }: PlaylistChooserInput): Promise<PlaylistChooserOutput> {
+export async function playlistChooser({ mood }: PlaylistChooserInput): Promise<PlaylistChooserOutput> {
   const allUserPlaylists = await getPlaylistsWithTracks();
   const enrichedRecommendations = await advancedPlaylistChooserFlow({ 
       mood, 
       allPlaylists: allUserPlaylists,
-      progressCallback,
   });
 
   return { recommendations: enrichedRecommendations };
@@ -71,7 +67,6 @@ const SongForAISchema = z.object({
 const AdvancedFlowInputSchema = z.object({
     mood: z.string(),
     allPlaylists: z.any(), // Using any to avoid circular dependencies with full Playlist type
-    progressCallback: z.function().optional(),
 });
 
 // Helper to shuffle an array
@@ -145,24 +140,20 @@ const advancedPlaylistChooserFlow = ai.defineFlow({
     name: 'advancedPlaylistChooserFlow',
     inputSchema: AdvancedFlowInputSchema,
     outputSchema: z.array(PlaylistRecommendationSchema),
-}, async ({ mood, allPlaylists, progressCallback }) => {
+}, async ({ mood, allPlaylists }) => {
     
     // 1. Determine contender playlists
     let contenderPlaylists: Playlist[] = allPlaylists;
     if (allPlaylists.length > 15) {
-        progressCallback?.(1, 'Too many playlists! Asking AI to find the best 15 contenders...');
         const playlistInfoForAI = allPlaylists.map(p => ({ id: p.id, name: p.name, trackCount: p.trackCount }));
         const { output } = await playlistFilterPrompt({ mood, playlists: playlistInfoForAI });
         if (output) {
             const contenderIds = new Set(output.playlistIds);
             contenderPlaylists = allPlaylists.filter(p => contenderIds.has(p.id));
         }
-    } else {
-        progressCallback?.(1, 'Analyzing your playlists...');
     }
 
     // 2. Sample songs from contender playlists
-    progressCallback?.(2, `Taking a random sample of songs from ${contenderPlaylists.length} playlists...`);
     const sampledSongs = new Map<string, Song>();
     contenderPlaylists.forEach(playlist => {
         const randomSample = shuffleArray(playlist.tracks).slice(0, 30);
@@ -179,7 +170,6 @@ const advancedPlaylistChooserFlow = ai.defineFlow({
     }));
 
     // 3. Rank the sampled songs using AI
-    progressCallback?.(3, `Asking AI to rank ${songListForAI.length} songs for a "${mood}" vibe...`);
     const { output: rankedSongOutput } = await songRankingPrompt({ mood, songs: songListForAI });
     if (!rankedSongOutput) {
         throw new Error("AI failed to rank the songs.");
@@ -187,7 +177,6 @@ const advancedPlaylistChooserFlow = ai.defineFlow({
     const top30SongIds = new Set(rankedSongOutput.rankedSongIds.slice(0, 30));
 
     // 4. Score playlists based on top songs
-    progressCallback?.(4, 'Scoring playlists based on which ones have the most "top hits"...');
     const playlistScores: Record<string, number> = {};
     contenderPlaylists.forEach(playlist => {
         let score = 0;
@@ -200,7 +189,6 @@ const advancedPlaylistChooserFlow = ai.defineFlow({
     });
 
     // 5. Select top 3 playlists
-    progressCallback?.(5, 'Finding your top 3 recommendations...');
     const top3PlaylistIds = Object.entries(playlistScores)
         .sort(([, a], [, b]) => b - a)
         .slice(0, 3)
