@@ -55,25 +55,18 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const { toast } = useToast();
 
   const handleOpenSheet = async () => {
-    if (Object.keys(playlistVibes).length === allPlaylists.length) return;
+    if (isVibeLoading || Object.keys(playlistVibes).length === allPlaylists.length) return;
     
     setIsVibeLoading(true);
     try {
       const vibesToFetch = allPlaylists.filter(p => !playlistVibes[p.id]);
-      const vibePromises = vibesToFetch.map(p => 
-        generatePlaylistVibe({ name: p.name, trackCount: p.trackCount })
-          .then(result => ({ id: p.id, vibe: result.vibe }))
-      );
       
-      const results = await Promise.all(vibePromises);
-      
-      setPlaylistVibes(prev => {
-        const newVibes = { ...prev };
-        results.forEach(({ id, vibe }) => {
-          newVibes[id] = vibe;
-        });
-        return newVibes;
-      });
+      for (const playlist of vibesToFetch) {
+         if (!playlistVibes[playlist.id]) {
+            const result = await generatePlaylistVibe({ name: playlist.name, trackCount: playlist.trackCount });
+            setPlaylistVibes(prev => ({...prev, [playlist.id]: result.vibe}));
+         }
+      }
 
     } catch (error) {
        console.error("Error generating playlist vibes:", error);
@@ -125,7 +118,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     if (!isClient) return {};
 
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 400;
+    const JITTER_STRENGTH = 800; // Increased jitter
     songs.forEach(song => {
       const parentPlaylists = song.playlists
         .map(pid => playlistPositions[pid])
@@ -396,7 +389,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 20 + Math.pow(song.popularity / 100, 2) * 150;
+          const size = 15 + Math.pow(song.popularity / 100, 2) * 250;
           if (!pos) return null;
 
           return (
