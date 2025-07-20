@@ -106,7 +106,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     if (!isClient) return {};
 
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 2000;
+    const JITTER_STRENGTH = 4000;
     songs.forEach(song => {
       const parentPlaylists = song.playlists
         .map(pid => playlistPositions[pid])
@@ -215,6 +215,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   }
 
   const handleApplyFilters = () => {
+    setSelectedPlaylists(stagedSelectedPlaylists);
     setSongCountFilter(stagedSongCountFilter[0]);
   }
 
@@ -237,37 +238,35 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
           <SheetTrigger asChild>
             <Button size="icon" variant="secondary"><ListMusic /></Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-[350px] sm:w-[450px] flex flex-col">
-            <SheetHeader>
+          <SheetContent side="left" className="w-[350px] sm:w-[450px] flex flex-col p-0">
+            <SheetHeader className="p-6 pb-0">
               <SheetTitle>Select Playlists</SheetTitle>
             </SheetHeader>
-            <div className="relative flex-1">
-              <ScrollArea className="absolute h-full w-full pr-4">
-                  <div className="space-y-4">
-                  {allPlaylists.map(p => (
-                      <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted">
-                        <Checkbox
-                          id={p.id}
-                          checked={stagedSelectedPlaylists[p.id] || false}
-                          onCheckedChange={(checked) => {
-                            setStagedSelectedPlaylists(prev => ({ ...prev, [p.id]: !!checked }));
-                          }}
-                        />
-                        <Label htmlFor={p.id} className="flex-1 flex items-center gap-3 cursor-pointer">
-                            <Image src={p.albumArt || 'https://placehold.co/64x64.png'} alt={p.name} width={48} height={48} className="rounded-md" />
-                            <div className="flex-1">
-                                <p className="font-semibold">{p.name}</p>
-                                <p className="text-xs text-muted-foreground">{p.trackCount} tracks</p>
-                            </div>
-                        </Label>
-                      </div>
-                  ))}
-                  </div>
-              </ScrollArea>
-            </div>
-            <SheetFooter>
+            <ScrollArea className="flex-1 p-6">
+                <div className="space-y-4">
+                {allPlaylists.map(p => (
+                    <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted -mx-2">
+                      <Checkbox
+                        id={p.id}
+                        checked={stagedSelectedPlaylists[p.id] || false}
+                        onCheckedChange={(checked) => {
+                          setStagedSelectedPlaylists(prev => ({ ...prev, [p.id]: !!checked }));
+                        }}
+                      />
+                      <Label htmlFor={p.id} className="flex-1 flex items-center gap-3 cursor-pointer">
+                          <Image src={p.albumArt || 'https://placehold.co/64x64.png'} alt={p.name} width={48} height={48} className="rounded-md" />
+                          <div className="flex-1">
+                              <p className="font-semibold">{p.name}</p>
+                              <p className="text-xs text-muted-foreground">{p.trackCount} tracks</p>
+                          </div>
+                      </Label>
+                    </div>
+                ))}
+                </div>
+            </ScrollArea>
+            <SheetFooter className="p-6 pt-4 border-t">
               <SheetClose asChild>
-                <Button onClick={() => setSelectedPlaylists(stagedSelectedPlaylists)}>
+                <Button onClick={handleApplyFilters}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Update Map
                 </Button>
@@ -398,7 +397,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
               >
                   <span 
                     className="font-bold text-foreground/80 text-center"
-                    style={{ fontSize: `${Math.max(1, 1 / transform.scale)}rem`}}
+                    style={{ fontSize: `0.75rem`}}
                   >
                     {p.name}
                   </span>
@@ -408,7 +407,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 15 + Math.pow(song.popularity / 100, 2) * 800;
+          const size = 15 + Math.pow(song.popularity / 100, 2) * 1600;
           if (!pos) return null;
 
           return (
