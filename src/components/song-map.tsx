@@ -1,4 +1,4 @@
-import { getPlaylistsWithTracks } from '@/services/spotify';
+import { getPlaylistsWithTracks, getAllSongsFromPlaylists } from '@/services/spotify';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import SongMapClient from './song-map-client';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -6,7 +6,8 @@ import { Terminal } from 'lucide-react';
 
 export default async function SongMap() {
   try {
-    const { playlists, songs } = await getPlaylistsWithTracks();
+    const playlists = await getPlaylistsWithTracks();
+    const songs = await getAllSongsFromPlaylists(playlists);
     
     return (
       <Card className="overflow-hidden">

@@ -79,7 +79,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
 
   // Filter and sort playlists for the selection sheet
   const sortedAndFilteredPlaylists = useMemo(() => {
-    return allPlaylists
+    return (allPlaylists || [])
       .filter(p => p.name.toLowerCase().includes(playlistSearchQuery.toLowerCase()))
       .sort((a, b) => {
         let compareA: string | number | Date | null;
@@ -108,10 +108,10 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
 
   // Filter playlists and songs based on selection
   const { playlists, songs, maxSongs } = useMemo(() => {
-    const activePlaylists = allPlaylists.filter(p => selectedPlaylists[p.id]);
+    const activePlaylists = (allPlaylists || []).filter(p => selectedPlaylists[p.id]);
     const activePlaylistIds = new Set(activePlaylists.map(p => p.id));
     
-    const songsInSelectedPlaylists = allSongs.filter(s => 
+    const songsInSelectedPlaylists = (allSongs || []).filter(s => 
       s.playlists.some(pid => activePlaylistIds.has(pid))
     );
     
@@ -152,7 +152,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         setSelectedPlaylists(initialState);
         setStagedSelectedPlaylists(initialState);
     }
-  }, [allPlaylists, selectedPlaylists]);
+  }, [allPlaylists]);
 
   useEffect(() => {
     if (stagedSongCountFilter[0] > maxSongs) {
@@ -597,7 +597,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 60 + Math.pow(song.popularity / 100, 2) * 10;
+          const size = 60 + Math.pow(song.popularity / 100, 2) * 20;
           if (!pos) return null;
 
           const isVisible = !selectionDetails || selectionDetails.connectedSongIds.has(song.id);
