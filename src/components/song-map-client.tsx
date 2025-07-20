@@ -3,8 +3,16 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import { Plus, Minus, Maximize } from 'lucide-react';
+import { Plus, Minus, Maximize, Info, Music, GitBranch, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Playlist, Song } from '@/types/spotify';
 
@@ -52,7 +60,7 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
     if (!isClient) return {}; // Avoid running on server
 
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 400; // Increased from 150 to spread songs out more
+    const JITTER_STRENGTH = 400; // Increased to spread songs out more
     songs.forEach(song => {
       const parentPlaylists = song.playlists.map(pid => playlistPositions[pid]).filter(Boolean);
       
@@ -170,6 +178,49 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
         <Button size="icon" variant="secondary" onClick={() => zoom('in')}><Plus /></Button>
         <Button size="icon" variant="secondary" onClick={() => zoom('out')}><Minus /></Button>
         <Button size="icon" variant="secondary" onClick={resetView}><Maximize /></Button>
+         <Dialog>
+          <DialogTrigger asChild>
+            <Button size="icon" variant="secondary"><Info /></Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>How to Read the Song Map</DialogTitle>
+              <DialogDescription>
+                This visualization helps you discover connections in your music library. Here's what everything means:
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 text-sm text-muted-foreground">
+                <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex-shrink-0 mt-1"></div>
+                    <div>
+                        <h3 className="font-semibold text-foreground">Playlists</h3>
+                        <p>The large, colored circles represent your playlists. Songs are clustered around the playlists they belong to.</p>
+                    </div>
+                </div>
+                 <div className="flex items-start gap-4">
+                    <Music className="w-8 h-8 text-primary flex-shrink-0 mt-1" />
+                    <div>
+                        <h3 className="font-semibold text-foreground">Songs</h3>
+                        <p>The smaller circles with album art are individual songs. Hover over a song to see its name and artist.</p>
+                    </div>
+                </div>
+                 <div className="flex items-start gap-4">
+                    <Star className="w-8 h-8 text-primary flex-shrink-0 mt-1" />
+                    <div>
+                        <h3 className="font-semibold text-foreground">Song Popularity</h3>
+                        <p>The size of a song's circle is determined by its popularity on Spotify. Bigger circles mean more popular songs.</p>
+                    </div>
+                </div>
+                 <div className="flex items-start gap-4">
+                    <GitBranch className="w-8 h-8 text-primary flex-shrink-0 mt-1" />
+                    <div>
+                        <h3 className="font-semibold text-foreground">Connections</h3>
+                        <p>Lines are drawn between songs that appear in the same playlist, revealing the musical fabric connecting your tracks.</p>
+                    </div>
+                </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
       <div
         className="absolute"
