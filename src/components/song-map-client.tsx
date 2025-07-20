@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
+import { cn } from '@/lib/utils';
 
 const MAP_SIZE = 4000;
 
@@ -38,6 +39,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState<Vector2D>({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
+  const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
 
   // State for playlist selection
   const [selectedPlaylists, setSelectedPlaylists] = useState<Record<string, boolean>>(() => {
@@ -106,17 +108,14 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     if (!isClient) return {};
   
     const positions: Record<string, Vector2D> = {};
-    // A much smaller, more controlled jitter value
-    const JITTER_STRENGTH = 400; 
+    const JITTER_STRENGTH = 800;
   
     songs.forEach(song => {
-      // Get the positions of playlists this song belongs to
       const parentPlaylistPos = song.playlists
         .map(pid => playlistPositions[pid])
-        .filter(Boolean); // Filter out undefined positions for playlists not in view
+        .filter(Boolean);
   
       if (parentPlaylistPos.length > 0) {
-        // Calculate the centroid (average position) of the parent playlists
         const centroid = parentPlaylistPos.reduce(
           (acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }),
           { x: 0, y: 0 }
@@ -124,13 +123,11 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         const avgX = centroid.x / parentPlaylistPos.length;
         const avgY = centroid.y / parentPlaylistPos.length;
   
-        // Apply a small random jitter around the centroid to create a cluster
         positions[song.id] = {
           x: avgX + (Math.random() - 0.5) * JITTER_STRENGTH,
           y: avgY + (Math.random() - 0.5) * JITTER_STRENGTH,
         };
       } else {
-        // Fallback for songs with no active parent playlists (should be rare)
         positions[song.id] = {
           x: MAP_SIZE / 2 + (Math.random() - 0.5) * MAP_SIZE / 4,
           y: MAP_SIZE / 2 + (Math.random() - 0.5) * MAP_SIZE / 4,
@@ -141,7 +138,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   }, [playlistPositions, songs, isClient]);
   
   const connections = useMemo(() => {
-    const lines: { start: Vector2D; end: Vector2D; key: string, color: string }[] = [];
+    const lines: { start: Vector2D; end: Vector2D; key: string, color: string, songIds: string[] }[] = [];
     playlists.forEach(playlist => {
       const playlistSongs = songs.filter(s => s.playlists.includes(playlist.id));
       for (let i = 0; i < playlistSongs.length; i++) {
@@ -155,7 +152,8 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
               start: posA,
               end: posB,
               key: `${playlist.id}-${songA.id}-${songB.id}`,
-              color: playlist.lineColor
+              color: playlist.lineColor,
+              songIds: [songA.id, songB.id]
             });
           }
         }
@@ -163,6 +161,24 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     });
     return lines;
   }, [songPositions, playlists, songs]);
+  
+  const selectionDetails = useMemo(() => {
+    if (!selectedSongId) return null;
+    const selectedSong = songs.find(s => s.id === selectedSongId);
+    if (!selectedSong) return null;
+
+    const connectedPlaylistIds = new Set(selectedSong.playlists);
+    
+    const connectedSongIds = new Set([selectedSongId]);
+    songs.forEach(song => {
+      // Find all songs that are in ANY of the same playlists as the selected song.
+      if (song.playlists.some(pid => connectedPlaylistIds.has(pid))) {
+        connectedSongIds.add(song.id);
+      }
+    });
+
+    return { selectedSong, connectedPlaylistIds, connectedSongIds };
+  }, [selectedSongId, songs, playlists]);
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -182,8 +198,8 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Ignore pan events on the filter card
-    if ((e.target as HTMLElement).closest('[data-filter-card]')) {
+    // Prevent pan start if clicking on a song node or filter card
+    if ((e.target as HTMLElement).closest('[data-song-node]') || (e.target as HTMLElement).closest('[data-filter-card]')) {
       return;
     }
     setIsPanning(true);
@@ -195,7 +211,18 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     setTransform(t => ({ ...t, x: e.clientX - startPan.x, y: e.clientY - startPan.y }));
   };
   
-  const handleMouseUp = () => setIsPanning(false);
+  const handleMouseUp = (e: React.MouseEvent) => {
+    // If it was a pan, don't deselect. A simple click won't have a large delta.
+    const movedDistance = Math.hypot(e.clientX - startPan.x - transform.x, e.clientY - startPan.y - transform.y);
+    if (isPanning && movedDistance < 5 && !(e.target as HTMLElement).closest('[data-song-node]')) {
+      setSelectedSongId(null);
+    }
+    setIsPanning(false);
+  };
+  
+  const handleSongClick = (songId: string) => {
+    setSelectedSongId(prevId => (prevId === songId ? null : songId));
+  }
 
   const zoom = (direction: 'in' | 'out') => {
     const scaleAmount = direction === 'in' ? 0.2 : -0.2;
@@ -221,6 +248,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     const newX = -MAP_SIZE/2*newScale + rect.width/2;
     const newY = -MAP_SIZE/2*newScale + rect.height/2;
     setTransform({ scale: newScale, x: newX, y: newY });
+    setSelectedSongId(null);
   }
 
   const handleApplyFilters = () => {
@@ -237,7 +265,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseLeave={() => setIsPanning(false)}
     >
        <div className="absolute top-2 left-2 z-20 flex flex-wrap gap-2">
         <Button size="icon" variant="secondary" onClick={() => zoom('in')}><Plus /></Button>
@@ -306,7 +334,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                     <Music className="w-8 h-8 text-primary flex-shrink-0 mt-1" />
                     <div>
                         <h3 className="font-semibold text-foreground">Songs</h3>
-                        <p>The smaller circles with album art are individual songs. Hover over a song to see its name and artist.</p>
+                        <p>The smaller circles with album art are individual songs. Hover over a song to see its name and artist. Click a song to highlight its connections.</p>
                     </div>
                 </div>
                  <div className="flex items-start gap-4">
@@ -370,18 +398,22 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
       >
         <svg width={MAP_SIZE} height={MAP_SIZE} className="absolute top-0 left-0 pointer-events-none">
           <g>
-            {connections.map(conn => (
-              <line 
-                key={conn.key} 
-                x1={conn.start.x} 
-                y1={conn.start.y} 
-                x2={conn.end.x} 
-                y2={conn.end.y} 
-                stroke={conn.color} 
-                strokeWidth="2"
-                opacity="0.7"
-              />
-            ))}
+            {connections.map(conn => {
+              const isVisible = !selectionDetails || (selectionDetails.connectedSongIds.has(conn.songIds[0]) && selectionDetails.connectedSongIds.has(conn.songIds[1]));
+              
+              return (
+                <line 
+                  key={conn.key} 
+                  x1={conn.start.x} 
+                  y1={conn.start.y} 
+                  x2={conn.end.x} 
+                  y2={conn.end.y} 
+                  stroke={conn.color} 
+                  strokeWidth="2"
+                  className={cn("transition-opacity duration-300", isVisible ? "opacity-70" : "opacity-10")}
+                />
+              )
+            })}
           </g>
         </svg>
 
@@ -390,10 +422,15 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
           const pos = playlistPositions[p.id];
           if(!pos) return null;
           const radius = 250 + p.trackCount * 2;
+          const isVisible = !selectionDetails || selectionDetails.connectedPlaylistIds.has(p.id);
+
           return (
               <div
                 key={p.id}
-                className="absolute rounded-full flex items-center justify-center pointer-events-none"
+                className={cn(
+                    "absolute rounded-full flex items-center justify-center pointer-events-none transition-opacity duration-300",
+                    isVisible ? "opacity-100" : "opacity-20"
+                )}
                 style={{
                   left: pos.x,
                   top: pos.y,
@@ -416,14 +453,23 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 30 + Math.pow(song.popularity / 100, 2) * 80;
+          const size = 60 + Math.pow(song.popularity / 100, 2) * 5;
           if (!pos) return null;
+
+          const isVisible = !selectionDetails || selectionDetails.connectedSongIds.has(song.id);
+          const isSelected = song.id === selectedSongId;
 
           return (
             <Tooltip key={song.id} delayDuration={100}>
               <TooltipTrigger asChild>
                   <div
-                    className="absolute rounded-full shadow-lg hover:scale-110 hover:z-10 transition-transform duration-200"
+                    data-song-node
+                    onClick={() => handleSongClick(song.id)}
+                    className={cn(
+                        "absolute rounded-full shadow-lg transition-all duration-300",
+                        isVisible ? "opacity-100" : "opacity-20",
+                        isSelected ? "scale-125 z-20" : "hover:scale-110 hover:z-10"
+                    )}
                     style={{
                       left: pos.x,
                       top: pos.y,
