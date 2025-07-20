@@ -407,7 +407,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 15 + Math.pow(song.popularity / 100, 2) * 1600;
+          const size = 15 + Math.pow(song.popularity / 100, 2) * 40;
           if (!pos) return null;
 
           return (
