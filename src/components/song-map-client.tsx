@@ -106,7 +106,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     if (!isClient) return {};
 
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 1000;
+    const JITTER_STRENGTH = 2000;
     songs.forEach(song => {
       const parentPlaylists = song.playlists
         .map(pid => playlistPositions[pid])
@@ -398,7 +398,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
               >
                   <span 
                     className="font-bold text-foreground/80 text-center"
-                    style={{ fontSize: `${Math.max(1, 2.5 / transform.scale)}rem`}}
+                    style={{ fontSize: `${Math.max(1, 1 / transform.scale)}rem`}}
                   >
                     {p.name}
                   </span>
@@ -408,7 +408,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 15 + Math.pow(song.popularity / 100, 2) * 400;
+          const size = 15 + Math.pow(song.popularity / 100, 2) * 800;
           if (!pos) return null;
 
           return (
