@@ -52,7 +52,7 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
     if (!isClient) return {}; // Avoid running on server
 
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 150;
+    const JITTER_STRENGTH = 400; // Increased from 150 to spread songs out more
     songs.forEach(song => {
       const parentPlaylists = song.playlists.map(pid => playlistPositions[pid]).filter(Boolean);
       
@@ -230,7 +230,7 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
         {songs.map(song => {
           const pos = songPositions[song.id];
           // Scale size based on popularity (0-100). More popular songs are larger.
-          const size = 20 + (song.popularity / 100) * 80;
+          const size = 20 + Math.pow(song.popularity / 100, 2) * 150;
           if (!pos) return null;
 
           return (
