@@ -104,27 +104,36 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
 
   const songPositions = useMemo(() => {
     if (!isClient) return {};
-
+  
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 6000;
+    // A much smaller, more controlled jitter value
+    const JITTER_STRENGTH = 250; 
+  
     songs.forEach(song => {
-      const parentPlaylists = song.playlists
+      // Get the positions of playlists this song belongs to
+      const parentPlaylistPos = song.playlists
         .map(pid => playlistPositions[pid])
-        .filter(Boolean);
-      
-      if (parentPlaylists.length > 0) {
-        const centroid = parentPlaylists.reduce(
+        .filter(Boolean); // Filter out undefined positions for playlists not in view
+  
+      if (parentPlaylistPos.length > 0) {
+        // Calculate the centroid (average position) of the parent playlists
+        const centroid = parentPlaylistPos.reduce(
           (acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }),
           { x: 0, y: 0 }
         );
+        const avgX = centroid.x / parentPlaylistPos.length;
+        const avgY = centroid.y / parentPlaylistPos.length;
+  
+        // Apply a small random jitter around the centroid to create a cluster
         positions[song.id] = {
-          x: centroid.x / parentPlaylists.length + (Math.random() - 0.5) * JITTER_STRENGTH,
-          y: centroid.y / parentPlaylists.length + (Math.random() - 0.5) * JITTER_STRENGTH,
+          x: avgX + (Math.random() - 0.5) * JITTER_STRENGTH,
+          y: avgY + (Math.random() - 0.5) * JITTER_STRENGTH,
         };
       } else {
-         positions[song.id] = {
-            x: MAP_SIZE / 2 + (Math.random() - 0.5) * MAP_SIZE/4,
-            y: MAP_SIZE / 2 + (Math.random() - 0.5) * MAP_SIZE/4,
+        // Fallback for songs with no active parent playlists (should be rare)
+        positions[song.id] = {
+          x: MAP_SIZE / 2 + (Math.random() - 0.5) * MAP_SIZE / 4,
+          y: MAP_SIZE / 2 + (Math.random() - 0.5) * MAP_SIZE / 4,
         };
       }
     });
