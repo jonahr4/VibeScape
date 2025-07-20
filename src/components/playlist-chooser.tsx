@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { cn } from "@/lib/utils"
 
 const formSchema = z.object({
   mood: z.string().min(2, {
@@ -70,10 +71,51 @@ function HowItWorksDialog() {
   );
 }
 
+const progressSteps = [
+  { id: 1, name: "Filtering Playlists" },
+  { id: 2, name: "Sampling Songs" },
+  { id: 3, name: "AI Ranking" },
+  { id: 4, name: "Scoring Playlists" },
+  { id: 5, name: "Finalizing" },
+];
+
+function ProgressTracker({ currentStep, description }: { currentStep: number, description: string }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        {progressSteps.map((step, index) => (
+          <React.Fragment key={step.id}>
+            <div className="flex flex-col items-center">
+              <div
+                className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors duration-300",
+                  currentStep > step.id ? "bg-primary text-primary-foreground" :
+                  currentStep === step.id ? "bg-primary text-primary-foreground animate-pulse-bg" :
+                  "bg-muted text-muted-foreground"
+                )}
+              >
+                {currentStep > step.id ? '✔' : step.id}
+              </div>
+              <p className="text-xs mt-1 text-center">{step.name}</p>
+            </div>
+            {index < progressSteps.length - 1 && <div className="flex-1 h-1 bg-border mx-2"></div>}
+          </React.Fragment>
+        ))}
+      </div>
+      <div className="text-center text-muted-foreground p-2 bg-muted/50 rounded-md">
+        <p>{description}</p>
+      </div>
+    </div>
+  )
+}
+
+
 export default function PlaylistChooser() {
   const [recommendations, setRecommendations] = useState<PlaylistRecommendation[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
+
+  const [progress, setProgress] = useState({ step: 0, description: "" });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -82,11 +124,16 @@ export default function PlaylistChooser() {
     },
   })
 
+  const handleProgress = useCallback((step: number, description: string) => {
+    setProgress({ step, description });
+  }, []);
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
     setRecommendations([])
+    setProgress({ step: 1, description: "Getting started..." });
     try {
-      const result = await playlistChooser({ mood: values.mood })
+      const result = await playlistChooser({ mood: values.mood, progressCallback: handleProgress })
       setRecommendations(result.recommendations)
     } catch (error) {
       console.error(error)
@@ -97,6 +144,7 @@ export default function PlaylistChooser() {
       })
     } finally {
       setIsLoading(false)
+      setProgress({ step: 0, description: "" });
     }
   }
 
@@ -136,9 +184,8 @@ export default function PlaylistChooser() {
       </Card>
 
       {isLoading && (
-         <div className="flex justify-center items-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="ml-4 text-muted-foreground">Analyzing your playlists... this might take a moment.</p>
+         <div className="p-4 border rounded-lg">
+            <ProgressTracker currentStep={progress.step} description={progress.description} />
          </div>
       )}
 

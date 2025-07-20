@@ -86,3 +86,18 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  @keyframes pulse-bg {
+    0%, 100% {
+      background-color: hsl(var(--primary) / 0.7);
+    }
+    50% {
+      background-color: hsl(var(--primary));
+    }
+  }
+
+  .animate-pulse-bg {
+    animation: pulse-bg 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
