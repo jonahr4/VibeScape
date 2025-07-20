@@ -67,14 +67,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [playlistSearchQuery, setPlaylistSearchQuery] = useState('');
 
   // State for playlist selection
-  const [selectedPlaylists, setSelectedPlaylists] = useState<Record<string, boolean>>(() => {
-    const initialState: Record<string, boolean> = {};
-    const sortedInitialPlaylists = [...allPlaylists].sort((a,b) => (new Date(b.lastModified!) > new Date(a.lastModified!) ? 1 : -1));
-    sortedInitialPlaylists.slice(0, 4).forEach(p => {
-      initialState[p.id] = true;
-    });
-    return initialState;
-  });
+  const [selectedPlaylists, setSelectedPlaylists] = useState<Record<string, boolean>>({});
   
   const [stagedSelectedPlaylists, setStagedSelectedPlaylists] = useState(selectedPlaylists);
   
@@ -139,11 +132,24 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
 
   useEffect(() => {
     setIsClient(true);
+    // Center the view on initial load
     const rect = containerRef.current?.getBoundingClientRect();
     if(rect) {
       setTransform(t => ({...t, x: -MAP_SIZE/2*t.scale + rect.width/2, y: -MAP_SIZE/2*t.scale + rect.height/2}));
     }
-  }, []);
+    
+    // Set initial playlists after client-side mount
+    if (allPlaylists && Object.keys(selectedPlaylists).length === 0) {
+      const initialState: Record<string, boolean> = {};
+      const sortedInitialPlaylists = [...allPlaylists].sort((a, b) => (new Date(b.lastModified!) > new Date(a.lastModified!) ? 1 : -1));
+      sortedInitialPlaylists.slice(0, 4).forEach(p => {
+        initialState[p.id] = true;
+      });
+      setSelectedPlaylists(initialState);
+      setStagedSelectedPlaylists(initialState);
+    }
+
+  }, [allPlaylists]);
 
   useEffect(() => {
     if (stagedSongCountFilter[0] > maxSongs) {
