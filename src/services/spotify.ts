@@ -5,7 +5,7 @@ import type { Playlist, Song } from '@/types/spotify';
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
-async function fetchSpotify(endpoint: string) {
+async function fetchSpotify(endpoint: string, options: RequestInit = {}) {
   const accessToken = process.env.SPOTIFY_ACCESS_TOKEN;
 
   if (!accessToken) {
@@ -13,7 +13,9 @@ async function fetchSpotify(endpoint: string) {
   }
 
   const response = await fetch(`${SPOTIFY_API_BASE}${endpoint}`, {
+    ...options,
     headers: {
+      ...options.headers,
       Authorization: `Bearer ${accessToken}`,
     },
     cache: 'no-store',
@@ -35,7 +37,12 @@ async function fetchSpotify(endpoint: string) {
     throw new Error(`Spotify API request failed for ${endpoint}. Details: ${errorDetails}`);
   }
 
-  return response.json();
+  // Handle cases where there is no JSON body
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+      return response.json();
+  }
+  return null;
 }
 
 const COLORS = [
@@ -55,91 +62,103 @@ function assignColor(index: number) {
     return COLORS[index % COLORS.length];
 }
 
-export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[], songs: Song[] }> {
-  // First, get the current user's profile to know their ID
+async function fetchAllPlaylistTracks(playlistId: string): Promise<any[]> {
+    let allItems: any[] = [];
+    let nextUrl: string | null = `/playlists/${playlistId}/tracks?fields=items(added_at,track(id,name,artists,album(images),popularity)),next&limit=100`;
+
+    while (nextUrl) {
+        const data = await fetchSpotify(nextUrl);
+        if (data && Array.isArray(data.items)) {
+            allItems = allItems.concat(data.items);
+        }
+        nextUrl = data?.next ? data.next.replace(SPOTIFY_API_BASE, '') : null;
+    }
+    return allItems;
+}
+
+
+export async function getPlaylistsWithTracks(): Promise<Playlist[]> {
   const userProfile = await fetchSpotify('/me');
   const userId = userProfile.id;
 
   const playlistData = await fetchSpotify('/me/playlists?limit=50');
   
   if (!playlistData || !Array.isArray(playlistData.items)) {
-    console.error('Unexpected playlist data structure:', playlistData);
     throw new Error('Failed to fetch playlists: The data format from Spotify was not as expected.');
   }
 
-  // Filter playlists to only include those owned by the user or collaborative playlists
   const userOwnedOrCollaborativePlaylists = playlistData.items.filter((p: any) => p.owner.id === userId || p.collaborative);
 
   const songsMap = new Map<string, Song>();
-  const playlistDateInfo: Record<string, { earliest: string | null, latest: string | null }> = {};
+  const finalPlaylists: Playlist[] = [];
 
-  const playlists: Omit<Playlist, 'dateCreated' | 'lastModified'>[] = userOwnedOrCollaborativePlaylists.map((p: any, index: number) => {
+  for (const [index, p] of userOwnedOrCollaborativePlaylists.entries()) {
       const color = assignColor(index);
-      playlistDateInfo[p.id] = { earliest: null, latest: null };
-      return {
-        id: p.id,
-        name: p.name,
-        color: color.background,
-        lineColor: color.line,
-        trackCount: p.tracks.total,
-        href: p.external_urls.spotify,
-        albumArt: p.images?.[0]?.url || null,
-      };
-    });
-
-  const trackPromises = playlists.map(playlist => 
-      fetchSpotify(`/playlists/${playlist.id}/tracks?fields=items(added_at,track(id,name,artists,album(images),popularity))&limit=100`)
-        .then(tracksData => ({ playlistId: playlist.id, tracksData }))
-        .catch(error => {
-            console.warn(`Could not fetch tracks for playlist ${playlist.name}:`, error);
-            return { playlistId: playlist.id, tracksData: null };
-        })
-  );
-  
-  const results = await Promise.all(trackPromises);
-
-  for (const { playlistId, tracksData } of results) {
-    if (!tracksData || !Array.isArray(tracksData.items)) {
-        continue;
-    }
-    for (const item of tracksData.items) {
-      if (!item.track || !item.track.id || !item.added_at) continue;
       
-      const addedAt = item.added_at;
-      const dateInfo = playlistDateInfo[playlistId];
+      const allTrackItems = await fetchAllPlaylistTracks(p.id);
 
-      if (!dateInfo.earliest || new Date(addedAt) < new Date(dateInfo.earliest)) {
-        dateInfo.earliest = addedAt;
-      }
-      if (!dateInfo.latest || new Date(addedAt) > new Date(dateInfo.latest)) {
-        dateInfo.latest = addedAt;
-      }
+      let earliestDate: string | null = null;
+      let latestDate: string | null = null;
+      const playlistTracks: Song[] = [];
 
-      const track = item.track;
-      if (songsMap.has(track.id)) {
-        const existingSong = songsMap.get(track.id)!;
-        if(!existingSong.playlists.includes(playlistId)) {
-            existingSong.playlists.push(playlistId);
+      for (const item of allTrackItems) {
+        if (!item.track || !item.track.id || !item.added_at) continue;
+        
+        const addedAt = item.added_at;
+        if (!earliestDate || new Date(addedAt) < new Date(earliestDate)) {
+            earliestDate = addedAt;
         }
-      } else {
-        const newSong: Song = {
-          id: track.id,
-          name: track.name,
-          artist: track.artists.map((a: any) => a.name).join(', '),
-          albumArt: track.album?.images?.[0]?.url || null,
-          popularity: track.popularity,
-          playlists: [playlistId],
-        };
-        songsMap.set(track.id, newSong);
+        if (!latestDate || new Date(addedAt) > new Date(latestDate)) {
+            latestDate = addedAt;
+        }
+  
+        const track = item.track;
+        let song: Song;
+
+        if (songsMap.has(track.id)) {
+            song = songsMap.get(track.id)!;
+            if(!song.playlists.includes(p.id)) {
+                song.playlists.push(p.id);
+            }
+        } else {
+            song = {
+                id: track.id,
+                name: track.name,
+                artist: track.artists.map((a: any) => a.name).join(', '),
+                albumArt: track.album?.images?.[0]?.url || null,
+                popularity: track.popularity,
+                playlists: [p.id],
+            };
+            songsMap.set(track.id, song);
+        }
+        playlistTracks.push(song);
       }
-    }
+      
+      finalPlaylists.push({
+          id: p.id,
+          name: p.name,
+          color: color.background,
+          lineColor: color.line,
+          trackCount: p.tracks.total,
+          href: p.external_urls.spotify,
+          albumArt: p.images?.[0]?.url || null,
+          dateCreated: earliestDate,
+          lastModified: latestDate,
+          tracks: playlistTracks,
+      });
   }
 
-  const finalPlaylists: Playlist[] = playlists.map(p => ({
-    ...p,
-    dateCreated: playlistDateInfo[p.id].earliest,
-    lastModified: playlistDateInfo[p.id].latest,
-  }));
+  return finalPlaylists;
+}
 
-  return { playlists: finalPlaylists, songs: Array.from(songsMap.values()) };
+export async function getAllSongsFromPlaylists(playlists: Playlist[]): Promise<Song[]> {
+    const allSongs = new Map<string, Song>();
+    playlists.forEach(p => {
+        p.tracks.forEach(t => {
+            if (!allSongs.has(t.id)) {
+                allSongs.set(t.id, t);
+            }
+        });
+    });
+    return Array.from(allSongs.values());
 }

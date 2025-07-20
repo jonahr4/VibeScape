@@ -10,6 +10,7 @@ export interface Playlist {
   albumArt: string | null;
   dateCreated: string | null;
   lastModified: string | null;
+  tracks: Song[];
 }
 
 export interface Song {

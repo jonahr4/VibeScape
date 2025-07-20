@@ -2,11 +2,9 @@
 'use server';
 
 /**
- * @fileOverview This file defines a Genkit flow for recommending playlists based on a user-specified mood.
+ * @fileOverview This file defines a Genkit flow for recommending playlists based on a user-specified mood using a hybrid AI and algorithmic approach.
  *
- * The flow takes a mood as input and returns a ranked list of 3 playlists from the user's library, with AI-generated explanations for each.
- *
- * - playlistChooser - A function that handles the playlist recommendation process.
+ * - playlistChooser - The main public function that orchestrates the recommendation process.
  * - PlaylistChooserInput - The input type for the playlistChooser function.
  * - PlaylistRecommendation - Represents a single playlist recommendation with its explanation.
  * - PlaylistChooserOutput - The return type for the playlistChooser function.
@@ -15,28 +13,14 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'zod';
 import { getPlaylistsWithTracks } from '@/services/spotify';
-import type { Playlist } from '@/types/spotify';
+import type { Playlist, Song } from '@/types/spotify';
 
-const PlaylistForAISchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  trackCount: z.number(),
-});
+// == Main Public-Facing Function and Types =================================
+// These are the primary exports used by the application UI.
 
-const PlaylistChooserInputSchema = z.object({
-  mood: z.string().describe('The mood the user is in (e.g., chill, energetic, melancholy).'),
-  playlists: z.array(PlaylistForAISchema).describe("A list of the user's available playlists to choose from."),
-});
-export type PlaylistChooserInput = z.infer<typeof PlaylistChooserInputSchema>;
-
-const AIRecommendationSchema = z.object({
-    playlistId: z.string().describe("The ID of the recommended playlist."),
-    explanation: z.string().describe('An AI-generated explanation of why this playlist matches the mood.'),
-});
-
-const AIOutputSchema = z.object({
-  recommendations: z.array(AIRecommendationSchema).length(3).describe('A ranked list of 3 playlist recommendations.'),
-});
+export type PlaylistChooserInput = {
+  mood: string;
+};
 
 const PlaylistRecommendationSchema = z.object({
   id: z.string(),
@@ -55,73 +39,179 @@ const PlaylistChooserOutputSchema = z.object({
 export type PlaylistChooserOutput = z.infer<typeof PlaylistChooserOutputSchema>;
 
 
-// This is the public-facing function that the client will call.
-export async function playlistChooser(input: { mood: string }): Promise<PlaylistChooserOutput> {
-  // 1. Fetch the user's playlists first.
-  const { playlists } = await getPlaylistsWithTracks();
-  
-  // 2. Prepare the data for the AI.
-  const playlistsForAI = playlists.map(p => ({
-    id: p.id,
-    name: p.name,
-    trackCount: p.trackCount,
-  }));
-
-  // 3. Call the underlying flow with the mood and the playlist data.
-  const aiOutput = await playlistChooserFlow({ mood: input.mood, playlists: playlistsForAI });
-
-  // 4. Enrich the AI output with full playlist details.
-  const enrichedRecommendations = aiOutput.recommendations.map(rec => {
-    const fullPlaylist = playlists.find(p => p.id === rec.playlistId);
-    if (!fullPlaylist) {
-        // This case should ideally not happen if the AI follows instructions
-        return null;
-    }
-    return {
-        id: fullPlaylist.id,
-        name: fullPlaylist.name,
-        albumArt: fullPlaylist.albumArt,
-        dateCreated: fullPlaylist.dateCreated,
-        lastModified: fullPlaylist.lastModified,
-        href: fullPlaylist.href,
-        explanation: rec.explanation,
-    };
-  }).filter((rec): rec is PlaylistRecommendation => rec !== null);
+/**
+ * Recommends 3 playlists based on a user's mood using a hybrid AI and algorithmic approach.
+ * @param {PlaylistChooserInput} input - The user's mood.
+ * @returns {Promise<PlaylistChooserOutput>} A promise that resolves to the recommended playlists.
+ */
+export async function playlistChooser(input: PlaylistChooserInput): Promise<PlaylistChooserOutput> {
+  const allUserPlaylists = await getPlaylistsWithTracks();
+  const enrichedRecommendations = await advancedPlaylistChooserFlow({ 
+      mood: input.mood, 
+      allPlaylists: allUserPlaylists 
+  });
 
   return { recommendations: enrichedRecommendations };
 }
 
-const playlistChooserPrompt = ai.definePrompt({
-  name: 'playlistChooserPrompt',
-  input: {
-    schema: PlaylistChooserInputSchema,
-  },
-  output: {
-    schema: AIOutputSchema,
-  },
-  prompt: `You are a playlist recommendation expert. Given the user's current mood, recommend three playlists that best match that mood.
 
-  You MUST choose from the following list of the user's playlists (provided as ID, name, and track count):
-  {{#each playlists}}
-  - ID: {{{this.id}}}, Name: {{{this.name}}}, Tracks: {{{this.trackCount}}}
-  {{/each}}
+// == Internal AI and Algorithmic Flow ======================================
+// The following section defines the multi-step process for recommendation.
 
-  Mood: {{{mood}}}
-
-  For each playlist, provide a brief explanation of why it matches the given mood. The playlists must be different.
-
-  Return the recommendations as a JSON object. Ensure the 'recommendations' field is an array of exactly 3 objects, each with a 'playlistId' and an 'explanation'.
-  `,
+const SongForAISchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  artist: z.string(),
 });
 
-const playlistChooserFlow = ai.defineFlow(
-  {
-    name: 'playlistChooserFlow',
-    inputSchema: PlaylistChooserInputSchema,
-    outputSchema: AIOutputSchema,
-  },
-  async input => {
-    const {output} = await playlistChooserPrompt(input);
-    return output!;
+const AdvancedFlowInputSchema = z.object({
+    mood: z.string(),
+    allPlaylists: z.any(), // Using any to avoid circular dependencies with full Playlist type
+});
+
+// Helper to shuffle an array
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
-);
+  return newArray;
+};
+
+
+// -- AI Step 1: Pre-filter playlists if there are too many ------------------
+
+const PlaylistFilterInputSchema = z.object({
+  mood: z.string(),
+  playlists: z.array(z.object({ id: z.string(), name: z.string(), trackCount: z.number() })),
+});
+const PlaylistFilterOutputSchema = z.object({
+  playlistIds: z.array(z.string()).length(15).describe("An array of exactly 15 playlist IDs that are the best contenders for the mood."),
+});
+
+const playlistFilterPrompt = ai.definePrompt({
+    name: 'playlistFilterPrompt',
+    input: { schema: PlaylistFilterInputSchema },
+    output: { schema: PlaylistFilterOutputSchema },
+    prompt: `You are a music expert. From the list of playlists provided, select the 15 that are most likely to match the user's mood.
+
+    User's Mood: {{{mood}}}
+    
+    Playlists:
+    {{#each playlists}}
+    - ID: {{{this.id}}}, Name: "{{{this.name}}}" ({{this.trackCount}} tracks)
+    {{/each}}
+    
+    Return ONLY the 15 most relevant playlist IDs.`,
+});
+
+
+// -- AI Step 2: Rank sampled songs by mood ----------------------------------
+
+const SongRankingInputSchema = z.object({
+    mood: z.string(),
+    songs: z.array(SongForAISchema),
+});
+const SongRankingOutputSchema = z.object({
+    rankedSongIds: z.array(z.string()).describe("An array of song IDs, sorted from most to least fitting for the mood."),
+});
+
+const songRankingPrompt = ai.definePrompt({
+    name: 'songRankingPrompt',
+    input: { schema: SongRankingInputSchema },
+    output: { schema: SongRankingOutputSchema },
+    prompt: `You are a music expert. A user wants to find songs that fit a specific mood.
+    
+    User's Mood: {{{mood}}}
+    
+    Here is a list of songs. Please rank them based on how well they fit this mood.
+    Songs:
+    {{#each songs}}
+    - ID: {{{this.id}}}, Name: "{{{this.name}}}" by {{{this.artist}}}
+    {{/each}}
+
+    Return an array of the song IDs, sorted from the best match to the worst.`,
+});
+
+
+// -- The Main Orchestrator Flow ----------------------------------------------
+const advancedPlaylistChooserFlow = ai.defineFlow({
+    name: 'advancedPlaylistChooserFlow',
+    inputSchema: AdvancedFlowInputSchema,
+    outputSchema: z.array(PlaylistRecommendationSchema),
+}, async ({ mood, allPlaylists }) => {
+    
+    // 1. Determine contender playlists
+    let contenderPlaylists: Playlist[] = allPlaylists;
+    if (allPlaylists.length > 15) {
+        const playlistInfoForAI = allPlaylists.map(p => ({ id: p.id, name: p.name, trackCount: p.trackCount }));
+        const { output } = await playlistFilterPrompt({ mood, playlists: playlistInfoForAI });
+        if (output) {
+            const contenderIds = new Set(output.playlistIds);
+            contenderPlaylists = allPlaylists.filter(p => contenderIds.has(p.id));
+        }
+    }
+
+    // 2. Sample songs from contender playlists
+    const sampledSongs = new Map<string, Song>();
+    contenderPlaylists.forEach(playlist => {
+        const randomSample = shuffleArray(playlist.tracks).slice(0, 30);
+        randomSample.forEach(song => {
+            if (!sampledSongs.has(song.id)) {
+                sampledSongs.set(song.id, song);
+            }
+        });
+    });
+    const songListForAI = Array.from(sampledSongs.values()).map(s => ({
+        id: s.id,
+        name: s.name,
+        artist: s.artist,
+    }));
+
+    // 3. Rank the sampled songs using AI
+    const { output: rankedSongOutput } = await songRankingPrompt({ mood, songs: songListForAI });
+    if (!rankedSongOutput) {
+        throw new Error("AI failed to rank the songs.");
+    }
+    const top30SongIds = new Set(rankedSongOutput.rankedSongIds.slice(0, 30));
+
+    // 4. Score playlists based on top songs
+    const playlistScores: Record<string, number> = {};
+    contenderPlaylists.forEach(playlist => {
+        let score = 0;
+        playlist.tracks.forEach(track => {
+            if (top30SongIds.has(track.id)) {
+                score++;
+            }
+        });
+        playlistScores[playlist.id] = score;
+    });
+
+    // 5. Select top 3 playlists
+    const top3PlaylistIds = Object.entries(playlistScores)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 3)
+        .map(([id]) => id);
+
+    // 6. Generate final explanations and format output
+    const finalRecommendations: PlaylistRecommendation[] = [];
+    for (const playlistId of top3PlaylistIds) {
+        const playlist = allPlaylists.find(p => p.id === playlistId);
+        if (playlist) {
+            const topHitsCount = playlistScores[playlistId];
+            const explanation = `This playlist is a great fit for a "${mood}" vibe, featuring ${topHitsCount} of the top 30 songs identified by our AI as matching your mood.`;
+            finalRecommendations.push({
+                id: playlist.id,
+                name: playlist.name,
+                albumArt: playlist.albumArt,
+                dateCreated: playlist.dateCreated,
+                lastModified: playlist.lastModified,
+                href: playlist.href,
+                explanation,
+            });
+        }
+    }
+    
+    return finalRecommendations;
+});

@@ -10,15 +10,65 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, ExternalLink } from "lucide-react"
+import { Loader2, ExternalLink, Info, Wand2 } from "lucide-react"
 import Image from "next/image"
 import { format } from 'date-fns'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 const formSchema = z.object({
   mood: z.string().min(2, {
     message: "Mood must be at least 2 characters.",
   }),
 })
+
+function HowItWorksDialog() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground">
+          <Info className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>How We Select Your Playlists</DialogTitle>
+          <DialogDescription>
+            We use a blend of smart sampling and AI analysis to find the perfect vibe.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 text-sm">
+          <div>
+            <h3 className="font-semibold text-foreground">Step 1: Playlist Filtering</h3>
+            <p className="text-muted-foreground">If you have more than 15 playlists, we use AI to identify the top 15 contenders based on your mood, so we can focus on the most relevant options.</p>
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Step 2: Song Sampling</h3>
+            <p className="text-muted-foreground">We take a random sample of up to 30 songs from each contender playlist. This gives us a good musical snapshot without being overwhelming.</p>
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Step 3: AI Vibe Check</h3>
+            <p className="text-muted-foreground">Our AI analyzes the sampled songs and ranks them based on how well they match the vibe you've described.</p>
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Step 4: Playlist Scoring</h3>
+            <p className="text-muted-foreground">We identify the top 30 songs from the AI's ranking—these are your "top hits" for the mood. We then rank your playlists based on how many of these top hits they contain.</p>
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Step 5: Final Recommendation</h3>
+            <p className="text-muted-foreground">You get the top 3 playlists, complete with an explanation of how many "top hit" songs were found in each one.</p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function PlaylistChooser() {
   const [recommendations, setRecommendations] = useState<PlaylistRecommendation[]>([])
@@ -54,7 +104,10 @@ export default function PlaylistChooser() {
     <div className="space-y-8 max-w-2xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle>AI Playlist Chooser</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            AI Playlist Chooser
+            <HowItWorksDialog />
+          </CardTitle>
           <CardDescription>Tell us your vibe, and we'll find the perfect playlist for you from your library.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -74,7 +127,7 @@ export default function PlaylistChooser() {
                 )}
               />
               <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                 Find Playlists
               </Button>
             </form>
@@ -85,6 +138,7 @@ export default function PlaylistChooser() {
       {isLoading && (
          <div className="flex justify-center items-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="ml-4 text-muted-foreground">Analyzing your playlists... this might take a moment.</p>
          </div>
       )}
 
