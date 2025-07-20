@@ -4,7 +4,7 @@
 /**
  * @fileOverview This file defines a Genkit flow for recommending playlists based on a user-specified mood.
  *
- * The flow takes a mood as input and returns a ranked list of 3 playlists, with AI-generated explanations for each.
+ * The flow takes a mood as input and returns a ranked list of 3 playlists from the user's library, with AI-generated explanations for each.
  *
  * - playlistChooser - A function that handles the playlist recommendation process.
  * - PlaylistChooserInput - The input type for the playlistChooser function.
@@ -14,9 +14,11 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { getPlaylistsWithTracks } from '@/services/spotify';
 
 const PlaylistChooserInputSchema = z.object({
   mood: z.string().describe('The mood the user is in (e.g., chill, energetic, melancholy).'),
+  playlists: z.array(z.string()).describe("A list of the user's available playlist names to choose from."),
 });
 export type PlaylistChooserInput = z.infer<typeof PlaylistChooserInputSchema>;
 
@@ -31,8 +33,14 @@ const PlaylistChooserOutputSchema = z.object({
 });
 export type PlaylistChooserOutput = z.infer<typeof PlaylistChooserOutputSchema>;
 
-export async function playlistChooser(input: PlaylistChooserInput): Promise<PlaylistChooserOutput> {
-  return playlistChooserFlow(input);
+// This is the public-facing function that the client will call.
+export async function playlistChooser(input: { mood: string }): Promise<PlaylistChooserOutput> {
+  // 1. Fetch the user's playlists first.
+  const { playlists } = await getPlaylistsWithTracks();
+  const playlistNames = playlists.map(p => p.name);
+
+  // 2. Call the underlying flow with the mood and the fetched playlist names.
+  return playlistChooserFlow({ mood: input.mood, playlists: playlistNames });
 }
 
 const playlistChooserPrompt = ai.definePrompt({
@@ -43,13 +51,18 @@ const playlistChooserPrompt = ai.definePrompt({
   output: {
     schema: PlaylistChooserOutputSchema,
   },
-  prompt: `You are a playlist recommendation expert. Given the user's current mood, recommend three playlists from their Spotify library that best match that mood.
+  prompt: `You are a playlist recommendation expert. Given the user's current mood, recommend three playlists that best match that mood.
+
+  You MUST choose from the following list of the user's playlists:
+  {{#each playlists}}
+  - {{{this}}}
+  {{/each}}
 
   Mood: {{{mood}}}
 
-  For each playlist, provide a brief explanation of why it matches the given mood.  The playlists must be different.
+  For each playlist, provide a brief explanation of why it matches the given mood. The playlists must be different.
 
-  Return the recommendations as a JSON object.  Ensure the 'recommendations' field is an array of exactly 3 PlaylistRecommendation objects.
+  Return the recommendations as a JSON object. Ensure the 'recommendations' field is an array of exactly 3 PlaylistRecommendation objects.
   `,
 });
 
