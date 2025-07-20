@@ -139,17 +139,20 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     }
     
     // Set initial playlists after client-side mount
-    if (allPlaylists && Object.keys(selectedPlaylists).length === 0) {
-      const initialState: Record<string, boolean> = {};
-      const sortedInitialPlaylists = [...allPlaylists].sort((a, b) => (new Date(b.lastModified!) > new Date(a.lastModified!) ? 1 : -1));
-      sortedInitialPlaylists.slice(0, 4).forEach(p => {
-        initialState[p.id] = true;
-      });
-      setSelectedPlaylists(initialState);
-      setStagedSelectedPlaylists(initialState);
+    if (allPlaylists && allPlaylists.length > 0 && Object.keys(selectedPlaylists).length === 0) {
+        const initialState: Record<string, boolean> = {};
+        const sortedInitialPlaylists = [...allPlaylists].sort((a, b) => {
+            const dateA = a.lastModified ? new Date(a.lastModified) : new Date(0);
+            const dateB = b.lastModified ? new Date(b.lastModified) : new Date(0);
+            return dateB.getTime() - dateA.getTime();
+        });
+        sortedInitialPlaylists.slice(0, 4).forEach(p => {
+            initialState[p.id] = true;
+        });
+        setSelectedPlaylists(initialState);
+        setStagedSelectedPlaylists(initialState);
     }
-
-  }, [allPlaylists]);
+  }, [allPlaylists, selectedPlaylists]);
 
   useEffect(() => {
     if (stagedSongCountFilter[0] > maxSongs) {
