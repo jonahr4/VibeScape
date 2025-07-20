@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search } from 'lucide-react';
+import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,6 +25,8 @@ import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 
 const MAP_SIZE = 4000;
 
@@ -32,6 +34,8 @@ type Vector2D = { x: number; y: number; };
 type Transform = { x: number; y: number; scale: number; };
 type Selection = { type: 'song' | 'playlist'; id: string } | null;
 type FilterMode = "top" | "random";
+type SortKey = "name" | "lastModified" | "dateCreated";
+type SortDirection = "asc" | "desc";
 
 interface SongMapClientProps {
   allPlaylists: Playlist[];
@@ -57,23 +61,57 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [isClient, setIsClient] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
 
+  // State for sorting and filtering playlists
+  const [sortKey, setSortKey] = useState<SortKey>('lastModified');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [playlistSearchQuery, setPlaylistSearchQuery] = useState('');
+
   // State for playlist selection
   const [selectedPlaylists, setSelectedPlaylists] = useState<Record<string, boolean>>(() => {
     const initialState: Record<string, boolean> = {};
-    allPlaylists.slice(0, 7).forEach(p => {
+    const sortedInitialPlaylists = [...allPlaylists].sort((a,b) => (new Date(b.lastModified!) > new Date(a.lastModified!) ? 1 : -1));
+    sortedInitialPlaylists.slice(0, 4).forEach(p => {
       initialState[p.id] = true;
     });
     return initialState;
   });
   
   const [stagedSelectedPlaylists, setStagedSelectedPlaylists] = useState(selectedPlaylists);
-  const [playlistSearchQuery, setPlaylistSearchQuery] = useState('');
   
   // State for song filter
   const [songCountFilter, setSongCountFilter] = useState(100);
   const [stagedSongCountFilter, setStagedSongCountFilter] = useState([100]);
   const [filterMode, setFilterMode] = useState<FilterMode>("top");
   const [stagedFilterMode, setStagedFilterMode] = useState<FilterMode>("top");
+
+  // Filter and sort playlists for the selection sheet
+  const sortedAndFilteredPlaylists = useMemo(() => {
+    return allPlaylists
+      .filter(p => p.name.toLowerCase().includes(playlistSearchQuery.toLowerCase()))
+      .sort((a, b) => {
+        let compareA: string | number | Date | null;
+        let compareB: string | number | Date | null;
+
+        if (sortKey === 'name') {
+          compareA = a.name.toLowerCase();
+          compareB = b.name.toLowerCase();
+        } else if (sortKey === 'lastModified') {
+          compareA = a.lastModified ? new Date(a.lastModified) : new Date(0);
+          compareB = b.lastModified ? new Date(b.lastModified) : new Date(0);
+        } else { // dateCreated
+          compareA = a.dateCreated ? new Date(a.dateCreated) : new Date(0);
+          compareB = b.dateCreated ? new Date(b.dateCreated) : new Date(0);
+        }
+
+        if (compareA < compareB) {
+          return sortDirection === 'asc' ? -1 : 1;
+        }
+        if (compareA > compareB) {
+          return sortDirection === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+  }, [allPlaylists, playlistSearchQuery, sortKey, sortDirection]);
 
   // Filter playlists and songs based on selection
   const { playlists, songs, maxSongs } = useMemo(() => {
@@ -128,7 +166,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
 
   const songPositions = useMemo(() => {
     if (!isClient) return {};
-    const JITTER_STRENGTH = 400; // 20% tighter than 512
+    const JITTER_STRENGTH = 400; 
     const positions: Record<string, Vector2D> = {};
 
     songs.forEach(song => {
@@ -304,10 +342,9 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     setSelection(null);
   }
 
-  const filteredPlaylists = useMemo(() => {
-    return allPlaylists.filter(p => p.name.toLowerCase().includes(playlistSearchQuery.toLowerCase()));
-  }, [allPlaylists, playlistSearchQuery]);
-
+  const toggleSortDirection = () => {
+    setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+  }
 
   return (
     <div 
@@ -330,19 +367,34 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
           <SheetContent side="left" className="w-[350px] sm:w-[450px] flex flex-col p-0">
             <SheetHeader className="p-6 pb-2 border-b">
               <SheetTitle>Select Playlists</SheetTitle>
-              <div className="relative pt-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search playlists..."
-                  className="pl-9"
-                  value={playlistSearchQuery}
-                  onChange={(e) => setPlaylistSearchQuery(e.target.value)}
-                />
+               <div className="flex gap-2 pt-2">
+                 <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Search playlists..."
+                    className="pl-9"
+                    value={playlistSearchQuery}
+                    onChange={(e) => setPlaylistSearchQuery(e.target.value)}
+                  />
+                 </div>
+                 <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                   <SelectTrigger className="w-[150px]">
+                     <SelectValue placeholder="Sort by..." />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="lastModified">Last Modified</SelectItem>
+                     <SelectItem value="dateCreated">Date Created</SelectItem>
+                     <SelectItem value="name">Name</SelectItem>
+                   </SelectContent>
+                 </Select>
+                 <Button variant="outline" size="icon" onClick={toggleSortDirection}>
+                   {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                 </Button>
               </div>
             </SheetHeader>
             <ScrollArea className="flex-1 p-6">
                 <div className="space-y-4">
-                {filteredPlaylists.map(p => (
+                {sortedAndFilteredPlaylists.map(p => (
                     <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted -mx-2">
                       <Checkbox
                         id={p.id}
@@ -536,7 +588,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 60 + Math.pow(song.popularity / 100, 2) * 5; // Reverted size change for now
+          const size = 60 + Math.pow(song.popularity / 100, 2) * 10;
           if (!pos) return null;
 
           const isVisible = !selectionDetails || selectionDetails.connectedSongIds.has(song.id);
