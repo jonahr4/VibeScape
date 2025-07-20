@@ -108,7 +108,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     if (!isClient) return {};
   
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 800;
+    const JITTER_STRENGTH = 640;
   
     songs.forEach(song => {
       const parentPlaylistPos = song.playlists
@@ -453,7 +453,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 60 + Math.pow(song.popularity / 100, 2) * 5;
+          const size = 120 + Math.pow(song.popularity / 100, 2) * 10;
           if (!pos) return null;
 
           const isVisible = !selectionDetails || selectionDetails.connectedSongIds.has(song.id);
