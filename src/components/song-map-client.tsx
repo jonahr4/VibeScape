@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter } from 'lucide-react';
+import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Input } from '@/components/ui/input';
 
 const MAP_SIZE = 4000;
 
@@ -65,6 +66,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   });
   
   const [stagedSelectedPlaylists, setStagedSelectedPlaylists] = useState(selectedPlaylists);
+  const [playlistSearchQuery, setPlaylistSearchQuery] = useState('');
   
   // State for song filter
   const [songCountFilter, setSongCountFilter] = useState(100);
@@ -125,7 +127,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
 
   const songPositions = useMemo(() => {
     if (!isClient) return {};
-    const JITTER_STRENGTH = 512;
+    const JITTER_STRENGTH = 400; // 20% tighter than 512
     const positions: Record<string, Vector2D> = {};
 
     songs.forEach(song => {
@@ -301,6 +303,10 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     setSelection(null);
   }
 
+  const filteredPlaylists = useMemo(() => {
+    return allPlaylists.filter(p => p.name.toLowerCase().includes(playlistSearchQuery.toLowerCase()));
+  }, [allPlaylists, playlistSearchQuery]);
+
 
   return (
     <div 
@@ -321,12 +327,21 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
             <Button size="icon" variant="secondary"><ListMusic /></Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-[350px] sm:w-[450px] flex flex-col p-0">
-            <SheetHeader className="p-6 pb-0">
+            <SheetHeader className="p-6 pb-2 border-b">
               <SheetTitle>Select Playlists</SheetTitle>
+              <div className="relative pt-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search playlists..."
+                  className="pl-9"
+                  value={playlistSearchQuery}
+                  onChange={(e) => setPlaylistSearchQuery(e.target.value)}
+                />
+              </div>
             </SheetHeader>
             <ScrollArea className="flex-1 p-6">
                 <div className="space-y-4">
-                {allPlaylists.map(p => (
+                {filteredPlaylists.map(p => (
                     <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted -mx-2">
                       <Checkbox
                         id={p.id}
@@ -518,7 +533,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 60 + Math.pow(song.popularity / 100, 2) * 5;
+          const size = 120 + Math.pow(song.popularity / 100, 2) * 10; // 2x bigger
           if (!pos) return null;
 
           const isVisible = !selectionDetails || selectionDetails.connectedSongIds.has(song.id);
