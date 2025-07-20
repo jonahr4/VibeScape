@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,9 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type { Playlist, Song } from '@/types/spotify';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { generatePlaylistVibe } from '@/ai/flows/playlist-vibe';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useToast } from '@/hooks/use-toast';
 
 const MAP_SIZE = 4000;
 
@@ -50,36 +48,6 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   });
   
   const [stagedSelectedPlaylists, setStagedSelectedPlaylists] = useState(selectedPlaylists);
-  const [playlistVibes, setPlaylistVibes] = useState<Record<string, string>>({});
-  const [isVibeLoading, setIsVibeLoading] = useState(false);
-  const { toast } = useToast();
-
-  const handleOpenSheet = async () => {
-    if (isVibeLoading || Object.keys(playlistVibes).length === allPlaylists.length) return;
-    
-    setIsVibeLoading(true);
-    try {
-      const vibesToFetch = allPlaylists.filter(p => !playlistVibes[p.id]);
-      
-      for (const playlist of vibesToFetch) {
-         if (!playlistVibes[playlist.id]) {
-            const result = await generatePlaylistVibe({ name: playlist.name, trackCount: playlist.trackCount });
-            setPlaylistVibes(prev => ({...prev, [playlist.id]: result.vibe}));
-         }
-      }
-
-    } catch (error) {
-       console.error("Error generating playlist vibes:", error);
-       toast({
-        variant: "destructive",
-        title: "AI Vibe Generation Failed",
-        description: "Could not generate vibes for the playlists. Please try again.",
-      });
-    } finally {
-        setIsVibeLoading(false);
-    }
-  };
-
 
   // Filter playlists and songs based on selection
   const { playlists, songs } = useMemo(() => {
@@ -237,7 +205,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         <Button size="icon" variant="secondary" onClick={() => zoom('in')}><Plus /></Button>
         <Button size="icon" variant="secondary" onClick={() => zoom('out')}><Minus /></Button>
         <Button size="icon" variant="secondary" onClick={resetView}><Maximize /></Button>
-         <Sheet onOpenChange={(open) => open && handleOpenSheet()}>
+         <Sheet>
           <SheetTrigger asChild>
             <Button size="icon" variant="secondary"><ListMusic /></Button>
           </SheetTrigger>
@@ -261,21 +229,13 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                             <Image src={p.albumArt || 'https://placehold.co/64x64.png'} alt={p.name} width={48} height={48} className="rounded-md" />
                             <div className="flex-1">
                                 <p className="font-semibold">{p.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {isVibeLoading && !playlistVibes[p.id] ? 'Getting vibe...' : playlistVibes[p.id] || `${p.trackCount} tracks`}
-                                </p>
+                                <p className="text-xs text-muted-foreground">{p.trackCount} tracks</p>
                             </div>
                         </Label>
                       </div>
                   ))}
                   </div>
               </ScrollArea>
-              {isVibeLoading && 
-                <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                  <span className="ml-2">Generating AI Vibes...</span>
-                </div>
-              }
             </div>
             <SheetFooter>
               <SheetClose asChild>
