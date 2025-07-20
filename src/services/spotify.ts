@@ -20,13 +20,14 @@ async function fetchSpotify(endpoint: string) {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+        throw new Error('The Spotify Access Token has expired or is invalid. Please obtain a new token and update your .env file.');
+    }
+    
     let errorDetails = `Status: ${response.status} ${response.statusText}`;
     try {
       const error = await response.json();
       errorDetails = JSON.stringify(error);
-      if (response.status === 401) {
-          throw new Error('Spotify API Error: The Access Token is invalid or has expired. Please get a new one.');
-      }
     } catch (e) {
       // Could not parse JSON body
     }
@@ -72,7 +73,7 @@ export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[],
   const songsMap = new Map<string, Song>();
   const playlistDateInfo: Record<string, { earliest: string | null, latest: string | null }> = {};
 
-  const playlists: Playlist[] = userOwnedOrCollaborativePlaylists.map((p: any, index: number): Omit<Playlist, 'dateCreated' | 'lastModified'> => {
+  const playlists: Omit<Playlist, 'dateCreated' | 'lastModified'>[] = userOwnedOrCollaborativePlaylists.map((p: any, index: number) => {
       const color = assignColor(index);
       playlistDateInfo[p.id] = { earliest: null, latest: null };
       return {
@@ -81,7 +82,7 @@ export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[],
         color: color.background,
         lineColor: color.line,
         trackCount: p.tracks.total,
-        href: p.href,
+        href: p.external_urls.spotify,
         albumArt: p.images?.[0]?.url || null,
       };
     });
