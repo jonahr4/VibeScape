@@ -1,7 +1,7 @@
 // src/components/song-map-client.tsx
 "use client";
 
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { format } from 'date-fns';
 
 const MAP_SIZE = 4000;
 
@@ -355,6 +356,8 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                           <div className="flex-1">
                               <p className="font-semibold">{p.name}</p>
                               <p className="text-xs text-muted-foreground">{p.trackCount} tracks</p>
+                              {p.dateCreated && <p className="text-xs text-muted-foreground">Created: {format(new Date(p.dateCreated), 'MMM yyyy')}</p>}
+                              {p.lastModified && <p className="text-xs text-muted-foreground">Modified: {format(new Date(p.lastModified), 'MMM yyyy')}</p>}
                           </div>
                       </Label>
                     </div>
@@ -533,7 +536,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          const size = 120 + Math.pow(song.popularity / 100, 2) * 10; // 2x bigger
+          const size = 60 + Math.pow(song.popularity / 100, 2) * 5; // Reverted size change for now
           if (!pos) return null;
 
           const isVisible = !selectionDetails || selectionDetails.connectedSongIds.has(song.id);

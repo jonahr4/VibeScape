@@ -63,9 +63,11 @@ export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[],
   }
 
   const songsMap = new Map<string, Song>();
+  const playlistDateInfo: Record<string, { earliest: string | null, latest: string | null }> = {};
 
-  const playlists: Playlist[] = playlistData.items.map((p: any, index: number): Playlist => {
+  const playlists: Playlist[] = playlistData.items.map((p: any, index: number): Omit<Playlist, 'dateCreated' | 'lastModified'> => {
       const color = assignColor(index);
+      playlistDateInfo[p.id] = { earliest: null, latest: null };
       return {
         id: p.id,
         name: p.name,
@@ -78,7 +80,7 @@ export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[],
     });
 
   const trackPromises = playlists.map(playlist => 
-      fetchSpotify(`/playlists/${playlist.id}/tracks?fields=items(track(id,name,artists,album(images),popularity))&limit=100`)
+      fetchSpotify(`/playlists/${playlist.id}/tracks?fields=items(added_at,track(id,name,artists,album(images),popularity))&limit=100`)
         .then(tracksData => ({ playlistId: playlist.id, tracksData }))
         .catch(error => {
             console.warn(`Could not fetch tracks for playlist ${playlist.name}:`, error);
@@ -93,9 +95,19 @@ export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[],
         continue;
     }
     for (const item of tracksData.items) {
-      const track = item.track;
-      if (!track || !track.id) continue;
+      if (!item.track || !item.track.id || !item.added_at) continue;
+      
+      const addedAt = item.added_at;
+      const dateInfo = playlistDateInfo[playlistId];
 
+      if (!dateInfo.earliest || new Date(addedAt) < new Date(dateInfo.earliest)) {
+        dateInfo.earliest = addedAt;
+      }
+      if (!dateInfo.latest || new Date(addedAt) > new Date(dateInfo.latest)) {
+        dateInfo.latest = addedAt;
+      }
+
+      const track = item.track;
       if (songsMap.has(track.id)) {
         const existingSong = songsMap.get(track.id)!;
         if(!existingSong.playlists.includes(playlistId)) {
@@ -115,5 +127,11 @@ export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[],
     }
   }
 
-  return { playlists, songs: Array.from(songsMap.values()) };
+  const finalPlaylists: Playlist[] = playlists.map(p => ({
+    ...p,
+    dateCreated: playlistDateInfo[p.id].earliest,
+    lastModified: playlistDateInfo[p.id].latest,
+  }));
+
+  return { playlists: finalPlaylists, songs: Array.from(songsMap.values()) };
 }

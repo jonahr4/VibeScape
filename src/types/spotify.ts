@@ -8,6 +8,8 @@ export interface Playlist {
   trackCount: number;
   href: string;
   albumArt: string | null;
+  dateCreated: string | null;
+  lastModified: string | null;
 }
 
 export interface Song {
