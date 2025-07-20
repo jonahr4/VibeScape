@@ -7,6 +7,7 @@ export interface Playlist {
   lineColor: string;
   trackCount: number;
   href: string;
+  albumArt: string | null;
 }
 
 export interface Song {

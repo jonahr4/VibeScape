@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import { Plus, Minus, Maximize, Info, Music, GitBranch, Star } from 'lucide-react';
+import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,26 +13,91 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetClose } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Playlist, Song } from '@/types/spotify';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { generatePlaylistVibe } from '@/ai/flows/playlist-vibe';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
 
 const MAP_SIZE = 4000;
-const PLAYLIST_RADIUS_BASE = 500;
 
 type Vector2D = { x: number; y: number; };
 type Transform = { x: number; y: number; scale: number; };
 
 interface SongMapClientProps {
-  playlists: Playlist[];
-  songs: Song[];
+  allPlaylists: Playlist[];
+  allSongs: Song[];
 }
 
-const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
+const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 0.2 });
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState<Vector2D>({ x: 0, y: 0 });
   const [isClient, setIsClient] = useState(false);
+
+  // State for playlist selection
+  const [selectedPlaylists, setSelectedPlaylists] = useState<Record<string, boolean>>(() => {
+    const initialState: Record<string, boolean> = {};
+    // Initially select the first 7 playlists
+    allPlaylists.slice(0, 7).forEach(p => {
+      initialState[p.id] = true;
+    });
+    return initialState;
+  });
+  
+  const [stagedSelectedPlaylists, setStagedSelectedPlaylists] = useState(selectedPlaylists);
+  const [playlistVibes, setPlaylistVibes] = useState<Record<string, string>>({});
+  const [isVibeLoading, setIsVibeLoading] = useState(false);
+  const { toast } = useToast();
+
+  const handleOpenSheet = async () => {
+    if (Object.keys(playlistVibes).length === allPlaylists.length) return;
+    
+    setIsVibeLoading(true);
+    try {
+      const vibesToFetch = allPlaylists.filter(p => !playlistVibes[p.id]);
+      const vibePromises = vibesToFetch.map(p => 
+        generatePlaylistVibe({ name: p.name, trackCount: p.trackCount })
+          .then(result => ({ id: p.id, vibe: result.vibe }))
+      );
+      
+      const results = await Promise.all(vibePromises);
+      
+      setPlaylistVibes(prev => {
+        const newVibes = { ...prev };
+        results.forEach(({ id, vibe }) => {
+          newVibes[id] = vibe;
+        });
+        return newVibes;
+      });
+
+    } catch (error) {
+       console.error("Error generating playlist vibes:", error);
+       toast({
+        variant: "destructive",
+        title: "AI Vibe Generation Failed",
+        description: "Could not generate vibes for the playlists. Please try again.",
+      });
+    } finally {
+        setIsVibeLoading(false);
+    }
+  };
+
+
+  // Filter playlists and songs based on selection
+  const { playlists, songs } = useMemo(() => {
+    const activePlaylists = allPlaylists.filter(p => selectedPlaylists[p.id]);
+    const activePlaylistIds = new Set(activePlaylists.map(p => p.id));
+    const activeSongs = allSongs.filter(s => 
+      s.playlists.some(pid => activePlaylistIds.has(pid))
+    );
+    return { playlists: activePlaylists, songs: activeSongs };
+  }, [allPlaylists, allSongs, selectedPlaylists]);
+
 
   useEffect(() => {
     setIsClient(true);
@@ -57,12 +122,14 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
   }, [playlists]);
 
   const songPositions = useMemo(() => {
-    if (!isClient) return {}; // Avoid running on server
+    if (!isClient) return {};
 
     const positions: Record<string, Vector2D> = {};
-    const JITTER_STRENGTH = 400; // Increased to spread songs out more
+    const JITTER_STRENGTH = 400;
     songs.forEach(song => {
-      const parentPlaylists = song.playlists.map(pid => playlistPositions[pid]).filter(Boolean);
+      const parentPlaylists = song.playlists
+        .map(pid => playlistPositions[pid])
+        .filter(Boolean);
       
       if (parentPlaylists.length > 0) {
         const centroid = parentPlaylists.reduce(
@@ -74,7 +141,6 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
           y: centroid.y / parentPlaylists.length + (Math.random() - 0.5) * JITTER_STRENGTH,
         };
       } else {
-        // Position songs not in any of the displayed playlists randomly in the center
          positions[song.id] = {
             x: MAP_SIZE / 2 + (Math.random() - 0.5) * MAP_SIZE/4,
             y: MAP_SIZE / 2 + (Math.random() - 0.5) * MAP_SIZE/4,
@@ -178,6 +244,56 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
         <Button size="icon" variant="secondary" onClick={() => zoom('in')}><Plus /></Button>
         <Button size="icon" variant="secondary" onClick={() => zoom('out')}><Minus /></Button>
         <Button size="icon" variant="secondary" onClick={resetView}><Maximize /></Button>
+         <Sheet onOpenChange={(open) => open && handleOpenSheet()}>
+          <SheetTrigger asChild>
+            <Button size="icon" variant="secondary"><ListMusic /></Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-[350px] sm:w-[450px] flex flex-col">
+            <SheetHeader>
+              <SheetTitle>Select Playlists</SheetTitle>
+            </SheetHeader>
+            <div className="relative flex-1">
+              <ScrollArea className="absolute h-full w-full pr-4">
+                  <div className="space-y-4">
+                  {allPlaylists.map(p => (
+                      <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted">
+                        <Checkbox
+                          id={p.id}
+                          checked={stagedSelectedPlaylists[p.id] || false}
+                          onCheckedChange={(checked) => {
+                            setStagedSelectedPlaylists(prev => ({ ...prev, [p.id]: !!checked }));
+                          }}
+                        />
+                        <Label htmlFor={p.id} className="flex-1 flex items-center gap-3 cursor-pointer">
+                            <Image src={p.albumArt || 'https://placehold.co/64x64.png'} alt={p.name} width={48} height={48} className="rounded-md" />
+                            <div className="flex-1">
+                                <p className="font-semibold">{p.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {isVibeLoading && !playlistVibes[p.id] ? 'Getting vibe...' : playlistVibes[p.id] || `${p.trackCount} tracks`}
+                                </p>
+                            </div>
+                        </Label>
+                      </div>
+                  ))}
+                  </div>
+              </ScrollArea>
+              {isVibeLoading && 
+                <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span className="ml-2">Generating AI Vibes...</span>
+                </div>
+              }
+            </div>
+            <SheetFooter>
+              <SheetClose asChild>
+                <Button onClick={() => setSelectedPlaylists(stagedSelectedPlaylists)}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Update Map
+                </Button>
+              </SheetClose>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
          <Dialog>
           <DialogTrigger asChild>
             <Button size="icon" variant="secondary"><Info /></Button>
@@ -253,7 +369,7 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
         {playlists.map(p => {
           const pos = playlistPositions[p.id];
           if(!pos) return null;
-          const radius = PLAYLIST_RADIUS_BASE + p.trackCount * 2;
+          const radius = 250 + p.trackCount * 2;
           return (
               <div
                 key={p.id}
@@ -280,7 +396,6 @@ const SongMapClient = ({ playlists, songs }: SongMapClientProps) => {
         
         {songs.map(song => {
           const pos = songPositions[song.id];
-          // Scale size based on popularity (0-100). More popular songs are larger.
           const size = 20 + Math.pow(song.popularity / 100, 2) * 150;
           if (!pos) return null;
 

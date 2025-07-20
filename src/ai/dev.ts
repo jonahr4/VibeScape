@@ -3,3 +3,4 @@ config();
 
 import '@/ai/flows/playlist-chooser.ts';
 import '@/ai/flows/ai-playlist-explanation.ts';
+import '@/ai/flows/playlist-vibe.ts';

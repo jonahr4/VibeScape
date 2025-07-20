@@ -16,7 +16,6 @@ async function fetchSpotify(endpoint: string) {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
-    // Add cache-busting to ensure fresh data
     cache: 'no-store',
   });
 
@@ -38,7 +37,6 @@ async function fetchSpotify(endpoint: string) {
   return response.json();
 }
 
-// Generate random colors for playlists
 const COLORS = [
   { background: 'rgba(233, 30, 99, 0.25)', line: 'rgba(233, 30, 99, 0.5)' },
   { background: 'rgba(103, 58, 183, 0.25)', line: 'rgba(103, 58, 183, 0.5)' },
@@ -47,6 +45,9 @@ const COLORS = [
   { background: 'rgba(3, 169, 244, 0.25)', line: 'rgba(3, 169, 244, 0.5)' },
   { background: 'rgba(255, 87, 34, 0.25)', line: 'rgba(255, 87, 34, 0.5)' },
   { background: 'rgba(76, 175, 80, 0.25)', line: 'rgba(76, 175, 80, 0.5)' },
+  { background: 'rgba(156, 39, 176, 0.25)', line: 'rgba(156, 39, 176, 0.5)' },
+  { background: 'rgba(244, 67, 54, 0.25)', line: 'rgba(244, 67, 54, 0.5)' },
+  { background: 'rgba(63, 81, 181, 0.25)', line: 'rgba(63, 81, 181, 0.5)' },
 ];
 
 function assignColor(index: number) {
@@ -72,44 +73,47 @@ export async function getPlaylistsWithTracks(): Promise<{ playlists: Playlist[],
         lineColor: color.line,
         trackCount: p.tracks.total,
         href: p.href,
+        albumArt: p.images?.[0]?.url || null,
       };
     });
 
-  // Fetch tracks for each playlist
-  // We fetch a limited number of playlists and tracks to keep the map readable
-  const playlistsToFetch = playlists.slice(0, 7);
-  for (const playlist of playlistsToFetch) {
-      try {
-        const tracksData = await fetchSpotify(`/playlists/${playlist.id}/tracks?fields=items(track(id,name,artists,album(images),popularity))&limit=50`);
-        if (!tracksData || !Array.isArray(tracksData.items)) {
-          console.warn(`Could not fetch tracks for playlist ${playlist.name}: Invalid data format.`);
-          continue;
-        }
-        for (const item of tracksData.items) {
-          const track = item.track;
-          if (!track || !track.id) continue;
+  const trackPromises = playlists.map(playlist => 
+      fetchSpotify(`/playlists/${playlist.id}/tracks?fields=items(track(id,name,artists,album(images),popularity))&limit=100`)
+        .then(tracksData => ({ playlistId: playlist.id, tracksData }))
+        .catch(error => {
+            console.warn(`Could not fetch tracks for playlist ${playlist.name}:`, error);
+            return { playlistId: playlist.id, tracksData: null };
+        })
+  );
+  
+  const results = await Promise.all(trackPromises);
 
-          if (songsMap.has(track.id)) {
-            const existingSong = songsMap.get(track.id)!;
-            if(!existingSong.playlists.includes(playlist.id)) {
-                existingSong.playlists.push(playlist.id);
-            }
-          } else {
-            const newSong: Song = {
-              id: track.id,
-              name: track.name,
-              artist: track.artists.map((a: any) => a.name).join(', '),
-              albumArt: track.album?.images?.[0]?.url || null, // FIX: Safely access album art
-              popularity: track.popularity,
-              playlists: [playlist.id],
-            };
-            songsMap.set(track.id, newSong);
-          }
+  for (const { playlistId, tracksData } of results) {
+    if (!tracksData || !Array.isArray(tracksData.items)) {
+        continue;
+    }
+    for (const item of tracksData.items) {
+      const track = item.track;
+      if (!track || !track.id) continue;
+
+      if (songsMap.has(track.id)) {
+        const existingSong = songsMap.get(track.id)!;
+        if(!existingSong.playlists.includes(playlistId)) {
+            existingSong.playlists.push(playlistId);
         }
-      } catch (error) {
-          console.warn(`Could not fetch tracks for playlist ${playlist.name}:`, error)
+      } else {
+        const newSong: Song = {
+          id: track.id,
+          name: track.name,
+          artist: track.artists.map((a: any) => a.name).join(', '),
+          albumArt: track.album?.images?.[0]?.url || null,
+          popularity: track.popularity,
+          playlists: [playlistId],
+        };
+        songsMap.set(track.id, newSong);
       }
+    }
   }
 
-  return { playlists: playlistsToFetch, songs: Array.from(songsMap.values()) };
+  return { playlists, songs: Array.from(songsMap.values()) };
 }

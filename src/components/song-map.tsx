@@ -15,7 +15,7 @@ export default async function SongMap() {
           <CardDescription>Explore your music library as a visual graph. Pan and zoom to discover connections.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <SongMapClient playlists={playlists} songs={songs} />
+          <SongMapClient allPlaylists={playlists} allSongs={songs} />
         </CardContent>
       </Card>
     );
