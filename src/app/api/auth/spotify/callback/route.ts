@@ -3,12 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
-  const state = searchParams.get('state');
   const error = searchParams.get('error');
   
   console.log('=== CALLBACK RECEIVED ===');
   console.log('Code:', !!code);
-  console.log('State:', state);
   console.log('Error:', error);
   
   // Check for errors
@@ -51,12 +49,18 @@ export async function GET(request: NextRequest) {
     console.log('Token expires in:', tokenData.expires_in, 'seconds');
     console.log('Access token length:', tokenData.access_token?.length);
     
-    // Instead of cookies, pass the token in the URL
-    const redirectUrl = new URL(`${request.nextUrl.origin}/?auth=success`);
-    redirectUrl.searchParams.set('token', tokenData.access_token);
+    // Set the token in an httpOnly cookie for server-side access
+    const response = NextResponse.redirect(`${request.nextUrl.origin}/?auth=success&token=${tokenData.access_token}`);
+    response.cookies.set('spotify_access_token', tokenData.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: tokenData.expires_in || 3600, // Use token expiry or default to 1 hour
+      path: '/',
+    });
     
-    console.log('Redirecting with token...');
-    return NextResponse.redirect(redirectUrl.toString());
+    console.log('Redirecting with token and cookie set...');
+    return response;
     
   } catch (error) {
     console.error('Error exchanging code for token:', error);

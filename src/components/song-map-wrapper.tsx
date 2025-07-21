@@ -25,40 +25,27 @@ export default function SongMapWrapper() {
         throw new Error('Not authenticated with Spotify. Please sign in.');
       }
       
-      console.log('Fetching playlists...');
-      const playlistsResponse = await fetch('https://api.spotify.com/v1/me/playlists', {
+      console.log('Fetching playlist and song data from API...');
+      const response = await fetch('/api/spotify/data', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
       
-      if (!playlistsResponse.ok) {
-        if (playlistsResponse.status === 401) {
+      if (!response.ok) {
+        if (response.status === 401) {
           localStorage.removeItem('spotify_access_token');
           throw new Error('Session expired. Please sign in again.');
         }
-        throw new Error(`Failed to fetch playlists: ${playlistsResponse.status}`);
+        throw new Error(`Failed to fetch data: ${response.status}`);
       }
       
-      const playlistsData = await playlistsResponse.json();
-      console.log('Got playlists:', playlistsData.items?.length || 0);
+      const data = await response.json();
+      console.log('Got playlists:', data.playlists?.length || 0);
+      console.log('Got songs:', data.songs?.length || 0);
       
-      // For now, just show the basic data - we can enhance this later
-      const simplePlaylists = playlistsData.items?.map((playlist: any) => ({
-        id: playlist.id,
-        name: playlist.name,
-        color: '#8B5CF6', // Default color for now
-        lineColor: '#8B5CF6',
-        trackCount: playlist.tracks?.total || 0,
-        href: playlist.external_urls?.spotify || '',
-        albumArt: playlist.images?.[0]?.url || null,
-        dateCreated: null,
-        lastModified: null,
-        tracks: []
-      })) || [];
-      
-      setPlaylists(simplePlaylists);
-      setSongs([]); // For now, just show playlists
+      setPlaylists(data.playlists || []);
+      setSongs(data.songs || []);
       
     } catch (err: any) {
       console.error('Error fetching Spotify data:', err);

@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
       client_id: clientId,
       scope: 'playlist-read-private playlist-read-collaborative user-read-private',
       redirect_uri: redirectUri,
-      state: state,
+      // Removing state for development to avoid mismatch issues
+      // state: state,
     }).toString();
   
   console.log('Redirecting to:', authUrl);

@@ -1,20 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getPlaylistsWithTracks, getAllSongsFromPlaylists } from '@/services/spotify';
+import { getPlaylistsWithTracks, getAllSongsFromPlaylists, getPlaylistsWithTracksUsingToken } from '@/services/spotify';
 
 export async function GET(request: NextRequest) {
   try {
     console.log('API: Fetching Spotify data...');
     
-    // Debug: Check what cookies we have
+    // Get token from Authorization header or cookies
+    const authHeader = request.headers.get('authorization');
+    const tokenFromHeader = authHeader?.replace('Bearer ', '');
+    
     const cookieStore = await cookies();
-    const allCookies = cookieStore.getAll();
-    console.log('API: Available cookies:', allCookies.map(c => ({ name: c.name, hasValue: !!c.value })));
+    const tokenFromCookie = cookieStore.get('spotify_access_token')?.value;
     
-    const spotifyToken = cookieStore.get('spotify_access_token');
-    console.log('API: Spotify token found:', !!spotifyToken?.value);
+    const accessToken = tokenFromHeader || tokenFromCookie;
     
-    const playlists = await getPlaylistsWithTracks();
+    console.log('API: Token from header:', !!tokenFromHeader);
+    console.log('API: Token from cookie:', !!tokenFromCookie);
+    console.log('API: Using token:', !!accessToken);
+    
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'Not authenticated with Spotify. Please sign in.' },
+        { status: 401 }
+      );
+    }
+    
+    // Temporarily set the token in a way the service can access it
+    // We'll create a modified version that accepts the token directly
+    const playlists = await getPlaylistsWithTracksUsingToken(accessToken);
     console.log('API: Got playlists:', playlists.length);
     
     const songs = await getAllSongsFromPlaylists(playlists);

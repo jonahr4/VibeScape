@@ -22,9 +22,8 @@ export default function Header() {
     
     if (urlParams.get('auth') === 'success') {
       const token = urlParams.get('token');
-      
-      if (token) {
-        // Store token in localStorage for now
+        if (token) {
+        // Store token in localStorage for client-side use
         localStorage.setItem('spotify_access_token', token);
         setIsAuthenticated(true);
         
