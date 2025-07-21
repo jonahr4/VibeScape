@@ -1,16 +1,32 @@
 // src/services/spotify.ts
 'use server';
 
+import { cookies } from 'next/headers';
 import type { Playlist, Song } from '@/types/spotify';
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
-async function fetchSpotify(endpoint: string, options: RequestInit = {}) {
-  const accessToken = process.env.SPOTIFY_ACCESS_TOKEN;
-
-  if (!accessToken) {
-    throw new Error('Spotify Access Token is not set in the .env file. Please add your token.');
+async function getAccessToken(): Promise<string> {
+  // First try to get token from cookies (OAuth flow)
+  const cookieStore = await cookies();
+  const tokenFromCookie = cookieStore.get('spotify_access_token')?.value;
+  
+  if (tokenFromCookie) {
+    return tokenFromCookie;
   }
+  
+  // Fallback to environment variable (manual token)
+  const tokenFromEnv = process.env.SPOTIFY_ACCESS_TOKEN;
+  
+  if (tokenFromEnv && tokenFromEnv !== 'YOUR_LONG_ACCESS_TOKEN_HERE') {
+    return tokenFromEnv;
+  }
+  
+  throw new Error('No valid Spotify access token found. Please sign in with Spotify or set SPOTIFY_ACCESS_TOKEN in your .env file.');
+}
+
+async function fetchSpotify(endpoint: string, options: RequestInit = {}) {
+  const accessToken = await getAccessToken();
 
   const response = await fetch(`${SPOTIFY_API_BASE}${endpoint}`, {
     ...options,
@@ -23,7 +39,7 @@ async function fetchSpotify(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     if (response.status === 401) {
-        throw new Error('The Spotify Access Token has expired or is invalid. Please obtain a new token and update your .env file.');
+        throw new Error('The Spotify Access Token has expired or is invalid. Please sign in again.');
     }
     
     let errorDetails = `Status: ${response.status} ${response.statusText}`;

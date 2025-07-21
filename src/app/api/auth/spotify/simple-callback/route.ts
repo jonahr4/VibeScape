@@ -6,23 +6,18 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get('state');
   const error = searchParams.get('error');
   
-  console.log('=== CALLBACK RECEIVED ===');
-  console.log('Code:', !!code);
-  console.log('State:', state);
+  console.log('=== SIMPLE CALLBACK ===');
+  console.log('Code received:', !!code);
   console.log('Error:', error);
   
-  // Check for errors
   if (error) {
-    console.log('OAuth error:', error);
     return NextResponse.redirect(`${request.nextUrl.origin}/?error=access_denied`);
   }
   
   if (!code) {
-    console.log('No authorization code received');
     return NextResponse.redirect(`${request.nextUrl.origin}/?error=no_code`);
   }
   
-  // Exchange authorization code for access token
   try {
     console.log('Exchanging code for token...');
     const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
@@ -42,24 +37,21 @@ export async function GET(request: NextRequest) {
     
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
-      console.error('Token exchange failed:', tokenResponse.status, errorText);
-      throw new Error(`Failed to exchange code for token: ${tokenResponse.status}`);
+      console.error('Token exchange failed:', errorText);
+      return NextResponse.redirect(`${request.nextUrl.origin}/?error=token_exchange_failed`);
     }
     
     const tokenData = await tokenResponse.json();
     console.log('Token exchange successful!');
-    console.log('Token expires in:', tokenData.expires_in, 'seconds');
-    console.log('Access token length:', tokenData.access_token?.length);
     
-    // Instead of cookies, pass the token in the URL
+    // Instead of cookies, let's pass the token in the URL for now
     const redirectUrl = new URL(`${request.nextUrl.origin}/?auth=success`);
     redirectUrl.searchParams.set('token', tokenData.access_token);
     
-    console.log('Redirecting with token...');
     return NextResponse.redirect(redirectUrl.toString());
     
   } catch (error) {
-    console.error('Error exchanging code for token:', error);
+    console.error('Error in callback:', error);
     return NextResponse.redirect(`${request.nextUrl.origin}/?error=token_exchange_failed`);
   }
 }

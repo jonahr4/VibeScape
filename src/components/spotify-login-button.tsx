@@ -25,11 +25,12 @@ export default function SpotifyLoginButton() {
   return (
     <Button
       variant="outline"
+      size="sm"
       type="button"
       onClick={handleLogin}
-      className="w-full"
+      className="flex items-center gap-2"
     >
-      <SpotifyIcon className="mr-2 h-5 w-5" />
+      <SpotifyIcon className="h-4 w-4" />
       Login with Spotify
     </Button>
   );
