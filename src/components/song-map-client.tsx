@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown, ChevronDown, Users } from 'lucide-react';
+import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown, ChevronDown, Users, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -84,6 +84,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [friendPlaylists, setFriendPlaylists] = useState<Record<string, Playlist[]>>({});
   const [friendsOpen, setFriendsOpen] = useState(true);
   const [openFriends, setOpenFriends] = useState<Record<string, boolean>>({});
+  const [friendLoading, setFriendLoading] = useState<Record<string, boolean>>({});
   
   // State for song filter
   const [songCountFilter, setSongCountFilter] = useState(50);
@@ -589,9 +590,15 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                   <div key={f.id} className="border rounded-md">
                     <button
                       className="w-full flex items-center justify-between gap-2 p-2"
-                      onClick={async () => {
-                        if (!friendPlaylists[f.id]) await loadFriendPlaylists(f.id);
+                      onClick={() => {
+                        // Open immediately to show a loading state
                         setOpenFriends(prev => ({ ...prev, [f.id]: !prev[f.id] }));
+                        if (!friendPlaylists[f.id]) {
+                          setFriendLoading(prev => ({ ...prev, [f.id]: true }));
+                          loadFriendPlaylists(f.id)
+                            .catch(() => {})
+                            .finally(() => setFriendLoading(prev => ({ ...prev, [f.id]: false })));
+                        }
                       }}
                     >
                       <div className="flex items-center gap-2">
@@ -600,15 +607,22 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                       </div>
                       <ChevronDown className={cn("h-4 w-4 transition-transform", openFriends[f.id] ? "rotate-180" : "rotate-0")} />
                     </button>
-                    {openFriends[f.id] && friendPlaylists[f.id] && (
+                    {openFriends[f.id] && (
                       <div className="px-2 pb-2 space-y-2">
-                        {friendPlaylists[f.id].map(pl => (
-                          <label key={pl.id} className="flex items-center gap-2 text-sm">
-                            <input type="checkbox" checked={!!stagedSelectedPlaylists[pl.id]} onChange={(e) => addFriendPlaylist(pl, e.target.checked)} />
-                            <Image src={pl.albumArt || 'https://placehold.co/32x32.png'} alt={pl.name} width={20} height={20} className="rounded" />
-                            <span className="truncate" title={pl.name}>{pl.name}</span>
-                          </label>
-                        ))}
+                        {(!friendPlaylists[f.id] || friendLoading[f.id]) ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading playlists…
+                          </div>
+                        ) : (
+                          friendPlaylists[f.id].map(pl => (
+                            <label key={pl.id} className="flex items-center gap-2 text-sm">
+                              <input type="checkbox" checked={!!stagedSelectedPlaylists[pl.id]} onChange={(e) => addFriendPlaylist(pl, e.target.checked)} />
+                              <Image src={pl.albumArt || 'https://placehold.co/32x32.png'} alt={pl.name} width={20} height={20} className="rounded" />
+                              <span className="truncate" title={pl.name}>{pl.name}</span>
+                            </label>
+                          ))
+                        )}
                       </div>
                     )}
                   </div>
