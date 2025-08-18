@@ -186,3 +186,78 @@ export async function getRecentlyPlayedTrackIds(): Promise<Set<string>> {
   }
   return ids;
 }
+
+// == Friend / Following helpers ===========================================
+
+export async function getFriendCandidates(): Promise<Array<{ id: string; name: string; image: string | null }>> {
+  const me = await fetchSpotify('/me');
+  const myId = me?.id;
+  const playlistData = await fetchSpotify('/me/playlists?limit=50');
+  const owners = new Map<string, { id: string; name: string }>();
+  if (playlistData && Array.isArray(playlistData.items)) {
+    playlistData.items.forEach((p: any) => {
+      const owner = p?.owner;
+      if (!owner) return;
+      if (owner.id && owner.id !== myId) {
+        owners.set(owner.id, { id: owner.id, name: owner.display_name || owner.id });
+      }
+    });
+  }
+
+  const result: Array<{ id: string; name: string; image: string | null }> = [];
+  for (const { id, name } of owners.values()) {
+    try {
+      const prof = await fetchSpotify(`/users/${id}`);
+      const image = prof?.images?.[0]?.url || null;
+      result.push({ id, name: prof?.display_name || name, image });
+    } catch {
+      result.push({ id, name, image: null });
+    }
+  }
+  return result;
+}
+
+export async function getUserPublicPlaylistsWithTracks(userId: string): Promise<Playlist[]> {
+  const data = await fetchSpotify(`/users/${userId}/playlists?limit=50`);
+  const list: Playlist[] = [];
+  if (!data || !Array.isArray(data.items)) return list;
+
+  for (const [index, p] of data.items.entries()) {
+    // Skip if it's not actually a playlist object
+    if (!p || !p.id) continue;
+    const color = assignColor(index);
+    const allTrackItems = await fetchAllPlaylistTracks(p.id);
+    let earliestDate: string | null = null;
+    let latestDate: string | null = null;
+    const playlistTracks: Song[] = [];
+    for (const item of allTrackItems) {
+      if (!item.track || !item.track.id || !item.added_at) continue;
+      const addedAt = item.added_at;
+      if (!earliestDate || new Date(addedAt) < new Date(earliestDate)) earliestDate = addedAt;
+      if (!latestDate || new Date(addedAt) > new Date(latestDate)) latestDate = addedAt;
+      const track = item.track;
+      const song: Song = {
+        id: track.id,
+        name: track.name,
+        artist: track.artists.map((a: any) => a.name).join(', '),
+        albumArt: track.album?.images?.[0]?.url || null,
+        popularity: track.popularity,
+        playlists: [p.id],
+      };
+      playlistTracks.push(song);
+    }
+    list.push({
+      id: p.id,
+      name: p.name,
+      color: color.background,
+      lineColor: color.line,
+      trackCount: p.tracks?.total ?? playlistTracks.length,
+      href: p.external_urls?.spotify ?? `https://open.spotify.com/playlist/${p.id}`,
+      albumArt: p.images?.[0]?.url || null,
+      dateCreated: earliestDate,
+      lastModified: latestDate,
+      tracks: playlistTracks,
+    });
+  }
+  return list;
+}

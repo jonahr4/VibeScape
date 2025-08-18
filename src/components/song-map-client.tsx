@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react';
+import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown, ChevronDown, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -78,6 +78,12 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [selectedPlaylists, setSelectedPlaylists] = useState<Record<string, boolean>>({});
   
   const [stagedSelectedPlaylists, setStagedSelectedPlaylists] = useState(selectedPlaylists);
+  const [mode, setMode] = useState<'library' | 'friend'>('library');
+  const [extraPlaylists, setExtraPlaylists] = useState<Playlist[]>([]);
+  const [friends, setFriends] = useState<Array<{ id: string; name: string; image: string | null }>>([]);
+  const [friendPlaylists, setFriendPlaylists] = useState<Record<string, Playlist[]>>({});
+  const [friendsOpen, setFriendsOpen] = useState(true);
+  const [openFriends, setOpenFriends] = useState<Record<string, boolean>>({});
   
   // State for song filter
   const [songCountFilter, setSongCountFilter] = useState(50);
@@ -121,28 +127,45 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
       });
   }, [allPlaylists, playlistSearchQuery, sortKey, sortDirection]);
 
+  // Combine base playlists with any selected friend playlists
+  const allCombinedPlaylists = useMemo(() => {
+    return [...(allPlaylists || []), ...extraPlaylists];
+  }, [allPlaylists, extraPlaylists]);
+
+  const friendPlaylistIds = useMemo(() => new Set(extraPlaylists.map(p => p.id)), [extraPlaylists]);
+
   // Filter playlists and songs based on selection
   const { playlists, songs, maxSongs } = useMemo(() => {
-    const activePlaylists = (allPlaylists || []).filter(p => selectedPlaylists[p.id]);
+    const activePlaylists = (allCombinedPlaylists || []).filter(p => selectedPlaylists[p.id]);
     const activePlaylistIds = new Set(activePlaylists.map(p => p.id));
-    
-    const songsInSelectedPlaylists = (allSongs || []).filter(s => 
-      s.playlists.some(pid => activePlaylistIds.has(pid))
-    );
-    
+    // Build song list from tracks of selected playlists (includes friend playlists)
+    const songMap = new Map<string, Song>();
+    activePlaylists.forEach(p => {
+      p.tracks.forEach(t => {
+        const existing = songMap.get(t.id);
+        if (!existing) {
+          // clone to avoid mutating originals; start with current playlist ids
+          songMap.set(t.id, { ...t, playlists: [...t.playlists] });
+        } else {
+          // merge playlist membership so shared songs connect across playlists (including friends)
+          if (!existing.playlists.includes(p.id)) {
+            existing.playlists.push(p.id);
+          }
+        }
+      });
+    });
+    const songsInSelectedPlaylists = Array.from(songMap.values());
     const maxSongs = songsInSelectedPlaylists.length;
     let filteredSongs: Song[];
-
     if (filterMode === 'top') {
       filteredSongs = [...songsInSelectedPlaylists]
         .sort((a, b) => b.popularity - a.popularity)
         .slice(0, songCountFilter);
-    } else { // random
+    } else {
       filteredSongs = shuffleArray(songsInSelectedPlaylists).slice(0, songCountFilter);
     }
-
     return { playlists: activePlaylists, songs: filteredSongs, maxSongs };
-  }, [allPlaylists, allSongs, selectedPlaylists, songCountFilter, filterMode]);
+  }, [allCombinedPlaylists, selectedPlaylists, songCountFilter, filterMode]);
 
 
   useEffect(() => {
@@ -430,6 +453,35 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
   }
 
+  // Friend data fetching (eager once)
+  useEffect(() => {
+    if (friends.length > 0) return;
+    fetch('/api/spotify/friends').then(r => r.json()).then(d => {
+      if (d?.friends) setFriends(d.friends);
+    }).catch(() => {});
+  }, [friends.length]);
+
+  const loadFriendPlaylists = async (userId: string) => {
+    if (friendPlaylists[userId]) return;
+    try {
+      const r = await fetch(`/api/spotify/users/${userId}/playlists`);
+      const d = await r.json();
+      if (d?.playlists) {
+        setFriendPlaylists(prev => ({ ...prev, [userId]: d.playlists }));
+      }
+    } catch {}
+  };
+
+  const addFriendPlaylist = (pl: Playlist, checked: boolean) => {
+    setStagedSelectedPlaylists(prev => ({ ...prev, [pl.id]: checked }));
+    if (checked) {
+      setExtraPlaylists(prev => {
+        if (prev.find(p => p.id === pl.id)) return prev;
+        return [...prev, pl];
+      });
+    }
+  };
+
   return (
     <div 
       ref={containerRef}
@@ -444,9 +496,13 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         <Button size="icon" variant="secondary" onClick={() => zoom('in')}><Plus /></Button>
         <Button size="icon" variant="secondary" onClick={() => zoom('out')}><Minus /></Button>
         <Button size="icon" variant="secondary" onClick={resetView}><Maximize /></Button>
-         <Sheet>
+        {/* My Playlists */}
+        <Sheet>
           <SheetTrigger asChild>
-            <Button size="icon" variant="secondary"><ListMusic /></Button>
+            <Button variant="secondary" size="sm" className="inline-flex items-center gap-2">
+              <ListMusic className="h-4 w-4" />
+              My Playlists
+            </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-[350px] sm:w-[450px] flex flex-col p-0">
             <SheetHeader className="p-6 pb-2 border-b">
@@ -503,6 +559,63 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
             <SheetFooter className="p-6 pt-4 border-t">
               <SheetClose asChild>
                 <Button onClick={handleApplyFilters}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Update Map
+                </Button>
+              </SheetClose>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+        {/* Friend's Playlists */}
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="secondary" size="sm" className="inline-flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Friend's Playlists
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-[350px] sm:w-[450px] flex flex-col p-0">
+            <SheetHeader className="p-6 pb-2 border-b">
+              <SheetTitle>Friend's Playlists</SheetTitle>
+            </SheetHeader>
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-2">
+                {friends.length === 0 && (
+                  <div className="text-sm text-muted-foreground px-2">No friends found.</div>
+                )}
+                {friends.map(f => (
+                  <div key={f.id} className="border rounded-md">
+                    <button
+                      className="w-full flex items-center justify-between gap-2 p-2"
+                      onClick={async () => {
+                        if (!friendPlaylists[f.id]) await loadFriendPlaylists(f.id);
+                        setOpenFriends(prev => ({ ...prev, [f.id]: !prev[f.id] }));
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Image src={f.image || 'https://placehold.co/48x48.png'} alt={f.name} width={24} height={24} className="rounded-full" />
+                        <div className="truncate text-sm font-medium" title={f.name}>{f.name}</div>
+                      </div>
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", openFriends[f.id] ? "rotate-180" : "rotate-0")} />
+                    </button>
+                    {openFriends[f.id] && friendPlaylists[f.id] && (
+                      <div className="px-2 pb-2 space-y-2">
+                        {friendPlaylists[f.id].map(pl => (
+                          <label key={pl.id} className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={!!stagedSelectedPlaylists[pl.id]} onChange={(e) => addFriendPlaylist(pl, e.target.checked)} />
+                            <Image src={pl.albumArt || 'https://placehold.co/32x32.png'} alt={pl.name} width={20} height={20} className="rounded" />
+                            <span className="truncate" title={pl.name}>{pl.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            <SheetFooter className="p-4 border-t">
+              <SheetClose asChild>
+                <Button onClick={handleApplyFilters} className="w-full">
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Update Map
                 </Button>
@@ -622,6 +735,77 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
           </Card>
         </Collapsible>
       </div>
+
+      {/* Legend top right */}
+      <div className="absolute top-2 right-[18.5rem] z-20">
+        <div className="bg-card border rounded-md p-2 text-xs space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="inline-block rounded-full" style={{ width: 16, height: 16, border: '6px solid #2196F3' }} />
+            <span>My Playlists</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block rounded-full" style={{ width: 16, height: 16, border: '6px solid #F44336' }} />
+            <span>Friend's Playlists</span>
+          </div>
+        </div>
+      </div>
+
+      {mode === 'friend' && (
+        <div className="absolute top-2 right-2 z-20 w-64 mt-[260px]" data-filter-card>
+          <Collapsible open={friendsOpen} onOpenChange={setFriendsOpen}>
+            <Card>
+              <CardHeader className="p-4">
+                <CollapsibleTrigger asChild>
+                  <button className="w-full flex items-center justify-between">
+                    <span className="text-base inline-flex items-center gap-2 font-semibold">
+                      <Users className="w-4 h-4" /> Your Following
+                    </span>
+                    <ChevronDown className={cn("h-4 w-4 transition-transform", friendsOpen ? "rotate-180" : "rotate-0")} />
+                  </button>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="p-4 pt-0 space-y-3">
+                  {friends.length === 0 && <div className="text-sm text-muted-foreground">No friends found from your playlists.</div>}
+                  <ScrollArea className="h-64 pr-2">
+                    <div className="space-y-2">
+                      {friends.map(f => (
+                        <div key={f.id} className="border rounded-md">
+                          <button
+                            className="w-full flex items-center justify-between gap-2 p-2"
+                            onClick={async () => {
+                              if (!friendPlaylists[f.id]) await loadFriendPlaylists(f.id);
+                              setOpenFriends(prev => ({ ...prev, [f.id]: !prev[f.id] }));
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Image src={f.image || 'https://placehold.co/48x48.png'} alt={f.name} width={24} height={24} className="rounded-full" />
+                              <div className="truncate text-sm font-medium" title={f.name}>{f.name}</div>
+                            </div>
+                            <ChevronDown className={cn("h-4 w-4 transition-transform", openFriends[f.id] ? "rotate-180" : "rotate-0")} />
+                          </button>
+                          {openFriends[f.id] && friendPlaylists[f.id] && (
+                            <div className="px-2 pb-2 space-y-2">
+                              {friendPlaylists[f.id].map(pl => (
+                                <label key={pl.id} className="flex items-center gap-2 text-xs">
+                                  <input type="checkbox" checked={!!stagedSelectedPlaylists[pl.id]} onChange={(e) => addFriendPlaylist(pl, e.target.checked)} />
+                                  <Image src={pl.albumArt || 'https://placehold.co/32x32.png'} alt={pl.name} width={20} height={20} className="rounded" />
+                                  <span className="truncate" title={pl.name}>{pl.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                  <Button onClick={handleApplyFilters} className="w-full" size="sm">Apply</Button>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        </div>
+      )}
 
       <div
         className="absolute"
@@ -769,6 +953,10 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
           if(!pos) return null;
           const radius = 250 + p.trackCount * 2;
           const isVisible = !selectionDetails || selectionDetails.connectedPlaylistIds.has(p.id);
+          const labelFont = Math.min(112, Math.max(24, Math.floor(radius / 4)));
+          const isFriend = friendPlaylistIds.has(p.id);
+          const borderColor = isFriend ? '#F44336' : '#2196F3';
+          const borderWidth = 6;
 
           return (
               <div
@@ -787,12 +975,12 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                   height: radius * 2,
                   backgroundColor: p.color,
                   transform: 'translate(-50%, -50%)',
-                  border: `2px solid ${p.lineColor}`
+                  border: `${borderWidth}px solid ${borderColor}`
                 }}
               >
-                  <span 
-                    className="font-bold text-foreground/80 text-center pointer-events-none"
-                    style={{ fontSize: `0.75rem`}}
+                  <span
+                    className="font-bold text-foreground/80 text-center pointer-events-none block w-full px-2 break-words"
+                    style={{ fontSize: `${labelFont}px` }}
                   >
                     {p.name}
                   </span>
@@ -849,6 +1037,31 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                  <p className="text-xs mt-2">Popularity: {song.popularity}</p>
               </TooltipContent>
             </Tooltip>
+          );
+        })}
+        {/* Overlay playlist names above songs, semi-transparent and non-interactive */}
+        {playlists.map(p => {
+          const pos = playlistPositions[p.id];
+          if (!pos) return null;
+          const radius = 250 + p.trackCount * 2;
+          const isVisible = !selectionDetails || selectionDetails.connectedPlaylistIds.has(p.id);
+          const labelFont = Math.min(112, Math.max(24, Math.floor(radius / 4)));
+          return (
+            <div
+              key={`overlay-${p.id}`}
+              className={cn("absolute pointer-events-none text-center")}
+              style={{
+                left: pos.x,
+                top: pos.y,
+                width: radius * 2,
+                transform: 'translate(-50%, -50%)',
+                opacity: isVisible ? 0.85 : 0.3,
+              }}
+            >
+              <span className="font-bold text-foreground block w-full px-2 break-words" style={{ fontSize: `${labelFont}px` }}>
+                {p.name}
+              </span>
+            </div>
           );
         })}
         </TooltipProvider>
