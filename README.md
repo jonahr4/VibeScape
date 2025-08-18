@@ -18,83 +18,44 @@ VibeScape is an experimental music discovery and visualization tool that connect
 
 ## Local Setup and Configuration Guide (A-Z)
 
-This guide will walk you through every step required to get the VibeScape application running on your local machine.
+This guide walks you through running VibeScape locally using Spotify Sign-In (OAuth).
 
 ### Step 1: Prerequisites
 
-Before you begin, ensure you have the following software installed on your computer:
+- Node.js 18+ (or 20 LTS), npm, and Git.
 
-- **Node.js**: VibeScape is a Node.js application. We recommend using the latest LTS (Long-Term Support) version. You can download it from [nodejs.org](https://nodejs.org/).
-- **npm (or yarn)**: Node.js comes with npm (Node Package Manager) pre-installed. You'll use this to install the project's dependencies.
-- **Git**: You need Git to clone the repository from its source. You can download it from [git-scm.com](https://git-scm.com/downloads).
-
-### Step 2: Clone the Repository
-
-Open your terminal or command prompt and navigate to the directory where you want to store the project. Then, run the following command to clone the repository:
+### Step 2: Clone and Install
 
 ```bash
 git clone <repository-url>
 cd <repository-directory>
-```
-
-Replace `<repository-url>` with the actual URL of the Git repository and `<repository-directory>` with the name of the folder created by the clone command.
-
-### Step 3: Install Project Dependencies
-
-Once you are inside the project's root directory, install all the necessary packages defined in `package.json` by running:
-
-```bash
 npm install
 ```
-This command will download and install all the required libraries, such as Next.js, React, and Genkit.
 
-### Step 4: Configure Spotify Credentials
+### Step 3: Create a Spotify App (OAuth)
 
-The application needs access to your Spotify data. For local development, this is done using a temporary **Access Token**.
+1. Go to the Spotify Developer Dashboard: https://developer.spotify.com/dashboard
+2. Create an app (e.g., “VibeScape Local”).
+3. Under Settings, add a Redirect URI: `http://localhost:9002/api/auth/callback/spotify` and save.
+4. Note your Client ID and Client Secret.
 
-**Important Note on the Access Token:** This token provides temporary, secure access to your Spotify data. It expires after about one hour. If the app stops working and you see a `401 Unauthorized` or `token expired` error, you will need to repeat these steps to generate a new one.
+### Step 4: Environment Variables
 
-**Future Improvement:** A full production app would implement a complete Spotify OAuth 2.0 login flow. This would allow users to log in with their Spotify account, grant permissions, and the application would automatically manage token refreshing in the background. For this local setup, we use a manual token for simplicity.
-
-**How to Generate Your Spotify Access Token:**
-
-1.  **Go to the Spotify Developer Dashboard**: Open your web browser and navigate to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
-2.  **Log In**: Log in with your regular Spotify account.
-3.  **Create an App**:
-    - Click the **"Create app"** button.
-    - Give your app a **Name** (e.g., "VibeScape Local Dev") and a **Description**.
-    - Agree to the terms and click **"Create"**.
-4.  **Go to the Spotify Console**: To get a token with the right permissions (scopes), the easiest way is through the Spotify Web API Console. Open this link in a new tab: [**Get Current User's Profile Console**](https://developer.spotify.com/console/get-current-user/).
-5.  **Get Token and Select Scopes**:
-    - On the console page, click the green **"Get Token"** button on the left.
-    - A popup will appear asking you to authorize the necessary permissions (scopes). For VibeScape to function correctly, you **must check the following boxes**:
-        - `playlist-read-private`
-        - `playlist-read-collaborative`
-    - After checking the boxes, scroll down and click the green **"Request Token"** button.
-6.  **Copy the Access Token**: You will be prompted to log in to Spotify again to grant access. After you do, you'll be returned to the console page. Your new OAuth Access Token will be displayed. It's a very long string of letters and numbers. Click the **"Copy"** button to copy it to your clipboard.
-
-### Step 5: Set Up Environment Variables
-
-The project uses a `.env` file to store sensitive information like your access token.
-
-1.  In the root directory of the project, find the file named `.env` and open it.
-2.  Add the following line to the file, pasting the token you copied in the previous step:
+Create a `.env` file with:
 
 ```
-SPOTIFY_ACCESS_TOKEN=YOUR_LONG_ACCESS_TOKEN_HERE
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+NEXTAUTH_URL=http://localhost:9002
+NEXTAUTH_SECRET=any-long-random-string
 ```
-Replace `YOUR_LONG_ACCESS_TOKEN_HERE` with the actual token. **Do not wrap it in quotes.**
 
-### Step 6: Run the Application
+Tip: Use `openssl rand -base64 32` (or any generator) for `NEXTAUTH_SECRET`.
 
-You're all set! To start the local development server, run the following command in your terminal from the project's root directory:
+### Step 5: Run the App
 
 ```bash
 npm run dev
 ```
 
-This will start the Next.js application. Once it's ready, it will typically be available at:
-
-**http://localhost:9002**
-
-Open this URL in your web browser. You should now see the VibeScape application running, populated with your personal Spotify playlist data!
+Open http://localhost:9002 and click “Sign in with Spotify”. The app will request playlist read scopes and securely manage access/refresh tokens.

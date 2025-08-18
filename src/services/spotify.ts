@@ -2,14 +2,17 @@
 'use server';
 
 import type { Playlist, Song } from '@/types/spotify';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
 async function fetchSpotify(endpoint: string, options: RequestInit = {}) {
-  const accessToken = process.env.SPOTIFY_ACCESS_TOKEN;
+  const session = await getServerSession(authOptions);
+  const accessToken = (session as any)?.accessToken as string | undefined;
 
   if (!accessToken) {
-    throw new Error('Spotify Access Token is not set in the .env file. Please add your token.');
+    throw new Error('You are not signed in with Spotify. Please click "Sign in with Spotify" to continue.');
   }
 
   const response = await fetch(`${SPOTIFY_API_BASE}${endpoint}`, {

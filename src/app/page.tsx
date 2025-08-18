@@ -15,12 +15,19 @@ function SongMapSkeleton() {
   )
 }
 
+import SignInButton from "@/components/auth/SignInButton";
+
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <header className="p-4 border-b shrink-0">
-        <h1 className="text-3xl font-bold text-primary font-headline">VibeScape</h1>
-        <p className="text-muted-foreground">Visualize your music, find your vibe.</p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-primary font-headline">VibeScape</h1>
+            <p className="text-muted-foreground">Visualize your music, find your vibe.</p>
+          </div>
+          <SignInButton />
+        </div>
       </header>
       <main className="flex-1 p-4 md:p-8">
         <Tabs defaultValue="song-map" className="w-full">
