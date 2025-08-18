@@ -1,7 +1,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import SongMap from "@/components/song-map"
 import PlaylistChooser from "@/components/playlist-chooser"
-import { Music, Star } from "lucide-react"
+import TopSongs from "@/components/top-songs"
+import { Music, Star, TrendingUp } from "lucide-react"
 import { Suspense } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 import LoadingScreen from "@/components/loading-screen"
@@ -46,9 +47,10 @@ export default async function Home() {
           </div>
         ) : (
         <Tabs defaultValue="song-map" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
+          <TabsList className="grid w-full grid-cols-3 md:w-[600px]">
             <TabsTrigger value="song-map"><Music className="mr-2 h-4 w-4" />Song Map</TabsTrigger>
             <TabsTrigger value="playlist-chooser"><Star className="mr-2 h-4 w-4" />Playlist Chooser</TabsTrigger>
+            <TabsTrigger value="top-songs"><TrendingUp className="mr-2 h-4 w-4" />Top Songs</TabsTrigger>
           </TabsList>
           <TabsContent value="song-map" className="mt-6">
              <Suspense fallback={<LoadingScreen messages={["Loading your favorite hits…","Analyzing your connections…","Creating the graph…"]} /> }>
@@ -57,6 +59,11 @@ export default async function Home() {
           </TabsContent>
           <TabsContent value="playlist-chooser" className="mt-6">
             <PlaylistChooser />
+          </TabsContent>
+          <TabsContent value="top-songs" className="mt-6">
+            <Suspense fallback={<LoadingScreen messages={["Ranking your songs…","Crunching play trends…","Sorting by popularity…"]} /> }>
+              <TopSongs />
+            </Suspense>
           </TabsContent>
         </Tabs>
         )}

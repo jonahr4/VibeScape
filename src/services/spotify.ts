@@ -165,3 +165,24 @@ export async function getAllSongsFromPlaylists(playlists: Playlist[]): Promise<S
     });
     return Array.from(allSongs.values());
 }
+
+// == Additional user-personal signals =====================================
+
+export async function getUserTopTrackIds(): Promise<Set<string>> {
+  // short_term captures current taste best; fallback to empty set
+  const data = await fetchSpotify('/me/top/tracks?limit=50&time_range=short_term');
+  const ids = new Set<string>();
+  if (data && Array.isArray(data.items)) {
+    data.items.forEach((t: any) => t?.id && ids.add(t.id));
+  }
+  return ids;
+}
+
+export async function getRecentlyPlayedTrackIds(): Promise<Set<string>> {
+  const data = await fetchSpotify('/me/player/recently-played?limit=50');
+  const ids = new Set<string>();
+  if (data && Array.isArray(data.items)) {
+    data.items.forEach((it: any) => it?.track?.id && ids.add(it.track.id));
+  }
+  return ids;
+}
