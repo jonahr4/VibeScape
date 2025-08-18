@@ -4,6 +4,9 @@ import PlaylistChooser from "@/components/playlist-chooser"
 import { Music, Star } from "lucide-react"
 import { Suspense } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
+import LoadingScreen from "@/components/loading-screen"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 
 function SongMapSkeleton() {
   return (
@@ -17,7 +20,8 @@ function SongMapSkeleton() {
 
 import SignInButton from "@/components/auth/SignInButton";
 
-export default function Home() {
+export default async function Home() {
+  const session = await getServerSession(authOptions);
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <header className="p-4 border-b shrink-0">
@@ -30,13 +34,24 @@ export default function Home() {
         </div>
       </header>
       <main className="flex-1 p-4 md:p-8">
+        {!session ? (
+          <div className="min-h-[60vh] flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <h2 className="text-2xl md:text-3xl font-bold">Get started with your Spotify</h2>
+              <p className="text-muted-foreground max-w-md mx-auto">Sign in to load your playlists and generate mood-based recommendations.</p>
+              <div className="flex justify-center">
+                <SignInButton />
+              </div>
+            </div>
+          </div>
+        ) : (
         <Tabs defaultValue="song-map" className="w-full">
           <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
             <TabsTrigger value="song-map"><Music className="mr-2 h-4 w-4" />Song Map</TabsTrigger>
             <TabsTrigger value="playlist-chooser"><Star className="mr-2 h-4 w-4" />Playlist Chooser</TabsTrigger>
           </TabsList>
           <TabsContent value="song-map" className="mt-6">
-             <Suspense fallback={<SongMapSkeleton />}>
+             <Suspense fallback={<LoadingScreen messages={["Loading your favorite hits…","Analyzing your connections…","Creating the graph…"]} /> }>
                 <SongMap />
             </Suspense>
           </TabsContent>
@@ -44,6 +59,7 @@ export default function Home() {
             <PlaylistChooser />
           </TabsContent>
         </Tabs>
+        )}
       </main>
     </div>
   );

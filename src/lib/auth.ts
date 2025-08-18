@@ -1,4 +1,4 @@
-import NextAuth, { type NextAuthOptions } from 'next-auth';
+import { type NextAuthOptions } from 'next-auth';
 import SpotifyProvider from 'next-auth/providers/spotify';
 
 // Scopes needed by this app
@@ -86,6 +86,3 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
   },
 };
-
-export const { handlers, auth } = NextAuth(authOptions);
-
