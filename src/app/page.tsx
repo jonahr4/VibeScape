@@ -25,10 +25,10 @@ export default async function Home() {
   const session = await getServerSession(authOptions);
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <header className="p-4 border-b shrink-0">
+      <header className="p-4 md:p-5 shrink-0 sticky top-0 z-10 bg-card/60 backdrop-blur supports-[backdrop-filter]:bg-card/40 border-b border-white/10">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-primary font-headline">VibeScape</h1>
+            <h1 className="text-3xl font-bold text-primary font-headline tracking-tight">VibeScape</h1>
             <p className="text-muted-foreground">Visualize your music, find your vibe.</p>
           </div>
           <SignInButton />
@@ -47,23 +47,29 @@ export default async function Home() {
           </div>
         ) : (
         <Tabs defaultValue="song-map" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 md:w-[600px]">
+          <TabsList className="grid w-full grid-cols-3 md:w-[600px] mx-auto">
             <TabsTrigger value="song-map"><Music className="mr-2 h-4 w-4" />Song Map</TabsTrigger>
             <TabsTrigger value="playlist-chooser"><Star className="mr-2 h-4 w-4" />Playlist Chooser</TabsTrigger>
             <TabsTrigger value="top-songs"><TrendingUp className="mr-2 h-4 w-4" />Top Songs</TabsTrigger>
           </TabsList>
           <TabsContent value="song-map" className="mt-6">
-             <Suspense fallback={<LoadingScreen messages={["Loading your favorite hits…","Analyzing your connections…","Creating the graph…"]} /> }>
+            <div className="max-w-6xl mx-auto">
+              <Suspense fallback={<LoadingScreen messages={["Loading your favorite hits…","Analyzing your connections…","Creating the graph…"]} /> }>
                 <SongMap />
-            </Suspense>
+              </Suspense>
+            </div>
           </TabsContent>
           <TabsContent value="playlist-chooser" className="mt-6">
-            <PlaylistChooser />
+            <div className="max-w-3xl mx-auto">
+              <PlaylistChooser />
+            </div>
           </TabsContent>
           <TabsContent value="top-songs" className="mt-6">
-            <Suspense fallback={<LoadingScreen messages={["Ranking your songs…","Crunching play trends…","Sorting by popularity…"]} /> }>
-              <TopSongs />
-            </Suspense>
+            <div className="max-w-3xl mx-auto">
+              <Suspense fallback={<LoadingScreen messages={["Ranking your songs…","Crunching play trends…","Sorting by popularity…"]} /> }>
+                <TopSongs />
+              </Suspense>
+            </div>
           </TabsContent>
         </Tabs>
         )}

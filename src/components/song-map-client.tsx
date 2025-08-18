@@ -453,6 +453,8 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
   }
 
+  
+
   // Friend data fetching (eager once)
   useEffect(() => {
     if (friends.length > 0) return;
