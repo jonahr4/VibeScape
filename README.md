@@ -75,11 +75,11 @@ UX Polish
 
 1) Sign in
 - On first load, you’ll see the sign‑in screen. Click “Sign in with Spotify”.
-![Sign in](src\photos\sign-in.png)
+![Sign in](src/photos\sign-in.png)
 
 2) Loading state
 - After sign‑in the app loads your library. This can take a moment depending on library size; you’ll see an animated loading indicator with rotating messages.
-![Loading](src\photos/loading.png)
+![Loading](src/photos/loading.png)
 
 3) Song Map (default view)
 - This is the main feature: playlists are large circles, songs cluster around them.
@@ -88,26 +88,26 @@ UX Polish
   - Playlist ↔ Song (membership)
   - Playlist ↔ Playlist (shared songs)
 - Use the slider to choose how many songs appear (Top or Random). Fewer songs render faster; large numbers can impact performance.
-![Default Song Map](src\photos/song-map-default.png)
-![Adjust songs with slider](src\photos/slider-more-songs.png)
+![Default Song Map](src/photos/song-map-default.png)
+![Adjust songs with slider](src/photos/slider-more-songs.png)
 
 4) Select My Playlists
 - Open the left sheet, search/sort, and check the playlists you want on the map.
 - Click “Update Map” to apply.
-![Select My Playlists](src\photos/select-my-playlists.png)
+![Select My Playlists](src/photos/select-my-playlists.png)
 
 5) Friend’s Playlists
 - Open the “Friend’s Playlists” sheet (left). Click a friend to reveal their public playlists, then check playlists to add.
 - Click “Update Map”. You can now see overlap between your selections and theirs.
 - Ownership: blue outline = yours; red outline = friend’s.
-![Friend selector](src\photos/selection-friends-playlists.png)
-![Overlap example](src\photos/graph-two-friends-two-personal.png)
+![Friend selector](src/photos/selection-friends-playlists.png)
+![Overlap example](src/photos/graph-two-friends-two-personal.png)
 
 6) Playlist Chooser (AI)
 - Switch to “Playlist Chooser”. Type any vibe (e.g., “late‑night coding focus” or “sunny road trip”). Click “Find Playlists”.
 - While it loads, expand “How it works” to see the transparent algorithm steps.
-![How we select (algorithm)](src\photos/playlist-chooser-how-it-works.png)
-![Playlist Chooser results](src\photos/playlist-chooser-results.png)
+![How we select (algorithm)](src/photos/playlist-chooser-how-it-works.png)
+![Playlist Chooser results](src/photos/playlist-chooser-results.png)
 
 7) Top Songs
 - Switch to “Top Songs” to see a ranked list using a personal score:
@@ -115,5 +115,5 @@ UX Polish
   - 35% Spotify Popularity (normalized)
   - 15% Library Frequency (across your playlists)
 - Click a song to expand and view its score breakdown. Use the per‑page control and filter by a specific playlist (with images).
-![Top Songs default](src\photos/top-songs-default.png)
-![Filter Top Songs by playlist](src\photos/top-songs-filter-by-playlist.png)
+![Top Songs default](src/photos/top-songs-default.png)
+![Filter Top Songs by playlist](src/photos/top-songs-filter-by-playlist.png)
