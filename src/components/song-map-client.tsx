@@ -2,6 +2,8 @@
 "use client";
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown, ChevronDown, Users, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,10 +26,12 @@ import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+// (Dialog types already imported above)
 
 
 const MAP_SIZE = 4000;
@@ -68,6 +72,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [selection, setSelection] = useState<Selection>(null);
   const [selectedConnection, setSelectedConnection] = useState<ConnectionSelection | null>(null);
   const EDGE_HITBOX_MULTIPLIER = 5;
+  const { toast: showToast } = useToast();
 
   // State for sorting and filtering playlists
   const [sortKey, setSortKey] = useState<SortKey>('lastModified');
@@ -85,6 +90,14 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [friendsOpen, setFriendsOpen] = useState(true);
   const [openFriends, setOpenFriends] = useState<Record<string, boolean>>({});
   const [friendLoading, setFriendLoading] = useState<Record<string, boolean>>({});
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectedSongIds, setSelectedSongIds] = useState<Set<string>>(new Set());
+  const [showSelectedOpen, setShowSelectedOpen] = useState(false);
+  const [expandedSelected, setExpandedSelected] = useState<Record<string, boolean>>({});
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createPublic, setCreatePublic] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
   
   // State for song filter
   const [songCountFilter, setSongCountFilter] = useState(50);
@@ -408,6 +421,14 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   
   const handleSongClick = (songId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isSelecting) {
+      setSelectedSongIds(prev => {
+        const next = new Set(prev);
+        if (next.has(songId)) next.delete(songId); else next.add(songId);
+        return next;
+      });
+      return;
+    }
     setSelection(prev => (prev?.type === 'song' && prev.id === songId) ? null : { type: 'song', id: songId });
   }
 
@@ -485,6 +506,8 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
     }
   };
 
+  const { toast } = useToast();
+
   return (
     <div 
       ref={containerRef}
@@ -498,7 +521,13 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
        <div className="absolute top-2 left-2 z-20 flex flex-wrap gap-2">
         <Button size="icon" variant="secondary" onClick={() => zoom('in')}><Plus /></Button>
         <Button size="icon" variant="secondary" onClick={() => zoom('out')}><Minus /></Button>
-        <Button size="icon" variant="secondary" onClick={resetView}><Maximize /></Button>
+        <Button size="icon" variant="secondary" onClick={resetView} title="Recenter"><Maximize /></Button>
+        <Button size="sm" variant={isSelecting ? "default" : "secondary"} onClick={() => setIsSelecting(v => !v)} title="Toggle selection mode">
+          {isSelecting ? 'Selecting…' : 'Select Songs'}
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => setShowSelectedOpen(true)} disabled={selectedSongIds.size === 0} title="Show selected songs">
+          Show Selected ({selectedSongIds.size})
+        </Button>
         {/* My Playlists */}
         <Sheet>
           <SheetTrigger asChild>
@@ -684,7 +713,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         </Dialog>
       </div>
 
-       <div className="absolute top-2 right-2 z-20 w-64" data-filter-card>
+      <div className="absolute top-2 right-2 z-20 w-64" data-filter-card>
         <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
           <Card>
             <CardHeader className="p-4">
@@ -763,6 +792,10 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
             <span className="inline-block rounded-full" style={{ width: 16, height: 16, border: '6px solid #F44336' }} />
             <span>Friend's Playlists</span>
           </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block rounded-full" style={{ width: 16, height: 16, border: '6px solid #22c55e' }} />
+            <span>Selected Song</span>
+          </div>
         </div>
       </div>
 
@@ -789,10 +822,16 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                         <div key={f.id} className="border rounded-md">
                           <button
                             className="w-full flex items-center justify-between gap-2 p-2"
-                            onClick={async () => {
-                              if (!friendPlaylists[f.id]) await loadFriendPlaylists(f.id);
-                              setOpenFriends(prev => ({ ...prev, [f.id]: !prev[f.id] }));
-                            }}
+                            onClick={() => {
+                        // Open immediately to show a loading state
+                        setOpenFriends(prev => ({ ...prev, [f.id]: !prev[f.id] }));
+                        if (!friendPlaylists[f.id]) {
+                          setFriendLoading(prev => ({ ...prev, [f.id]: true }));
+                          loadFriendPlaylists(f.id)
+                            .catch(() => {})
+                            .finally(() => setFriendLoading(prev => ({ ...prev, [f.id]: false })));
+                        }
+                      }}
                           >
                             <div className="flex items-center gap-2">
                               <Image src={f.image || 'https://placehold.co/48x48.png'} alt={f.name} width={24} height={24} className="rounded-full" />
@@ -1011,6 +1050,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
 
           const isVisible = !selectionDetails || selectionDetails.connectedSongIds.has(song.id);
           const isSelected = selection?.type === 'song' && song.id === selection.id;
+          const isMarked = selectedSongIds.has(song.id);
 
           return (
             <Tooltip key={song.id} delayDuration={100}>
@@ -1021,7 +1061,8 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                     className={cn(
                         "absolute rounded-full shadow-lg transition-all duration-300",
                         isVisible ? "opacity-100" : "opacity-20",
-                        isSelected ? "scale-125 z-20" : "hover:scale-110 hover:z-10"
+                        isSelected ? "scale-125 z-20" : "hover:scale-110 hover:z-10",
+                        isMarked ? "ring-4 ring-green-400 ring-offset-2 ring-offset-background" : ""
                     )}
                     style={{
                       left: pos.x,
@@ -1081,7 +1122,121 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
           );
         })}
         </TooltipProvider>
-      </div>
+
+        {/* Selected songs modal */}
+        <Dialog open={showSelectedOpen} onOpenChange={setShowSelectedOpen}>
+          <DialogContent className="max-w-3xl w-[95vw] h-[80vh]">
+            <DialogHeader>
+              <DialogTitle>Selected Songs ({selectedSongIds.size})</DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="h-[65vh] pr-2">
+              <div className="space-y-3">
+                {Array.from(selectedSongIds).map(id => {
+                  const s = songs.find(x => x.id === id) || allCombinedPlaylists.flatMap(p=>p.tracks).find(x=>x.id===id);
+                  if (!s) return null;
+                  const inPlaylists = (allCombinedPlaylists || []).filter(p => s.playlists.includes(p.id));
+                  const expanded = !!expandedSelected[id];
+                  return (
+                    <div key={id} className="border rounded-md p-3 bg-card/30">
+                      <button className="w-full flex items-center justify-between text-left" onClick={() => setExpandedSelected(prev=>({ ...prev, [id]: !prev[id] }))}>
+                        <div className="flex items-center gap-3">
+                          <Image src={s.albumArt || 'https://placehold.co/64x64.png'} alt={s.name} width={48} height={48} className="rounded" />
+                          <div>
+                            <div className="font-medium">{s.name}</div>
+                            <div className="text-sm text-muted-foreground">{s.artist}</div>
+                          </div>
+                        </div>
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", expanded ? "rotate-180" : "rotate-0")} />
+                      </button>
+                      {expanded && (
+                        <div className="mt-3 pl-12 space-y-1 text-sm">
+                          {inPlaylists.map(p => (
+                            <div key={p.id} className="flex items-center gap-2">
+                              <Image src={p.albumArt || 'https://placehold.co/24x24.png'} alt={p.name} width={20} height={20} className="rounded" />
+                              <span className="truncate">{p.name}</span>
+                              <span className="text-muted-foreground">— {(extraPlaylists.find(ep=>ep.id===p.id) ? 'Friend' : 'You')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+            <div className="pt-2 flex items-center justify-between gap-3">
+              <div className="text-xs text-muted-foreground">Tip: Toggle selection mode to add/remove songs.</div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setSelectedSongIds(new Set())} disabled={selectedSongIds.size===0}>Clear Selected</Button>
+                <Button size="sm" onClick={() => {
+                const hasFriend = Array.from(selectedSongIds).some(id => {
+                  const s = songs.find(x => x.id === id) || allCombinedPlaylists.flatMap(p=>p.tracks).find(x=>x.id===id);
+                  if (!s) return false;
+                  return (extraPlaylists||[]).some(pl => s.playlists.includes(pl.id));
+                });
+                if (hasFriend) {
+                  setCreateName('User 1 and User 2 Blend Created By VibeScape');
+                } else {
+                  const today = new Date();
+                  const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                  setCreateName(`Custom Blend (${dateStr}) Created By VibeScape`);
+                }
+                setCreatePublic(false);
+                setCreateOpen(true);
+              }} disabled={selectedSongIds.size===0}>Create Playlist</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create playlist modal */}
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogContent className="max-w-md w-[95vw]">
+            <DialogHeader>
+              <DialogTitle>Create Playlist</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="playlist-name">Name</Label>
+                <Input id="playlist-name" value={createName} onChange={(e)=>setCreateName(e.target.value)} placeholder="Playlist name" />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-sm">Public</div>
+                  <div className="text-xs text-muted-foreground">Make playlist visible on your profile</div>
+                </div>
+                <Switch checked={createPublic} onCheckedChange={setCreatePublic} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={()=>setCreateOpen(false)}>Cancel</Button>
+                <Button onClick={async ()=>{
+                  setIsPosting(true);
+                  try{
+                    const trackIds = Array.from(selectedSongIds);
+                    const res = await fetch('/api/spotify/create-playlist', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ name: createName, isPublic: createPublic, trackIds }),
+                    });
+                    const data = await res.json();
+                    if(!res.ok){ throw new Error(data?.error || 'Failed to create playlist'); }
+                    showToast({ title: 'Playlist created', description: 'Your playlist was created on Spotify.' });
+                    setCreateOpen(false);
+                  } catch(e){
+                    showToast({ title: 'Failed to create', description: (e as any)?.message || 'Something went wrong', variant: 'destructive' });
+                  } finally{
+                    setIsPosting(false);
+                  }
+                }} disabled={isPosting || !createName.trim()}>
+                  {isPosting ? 'Posting…' : 'Post'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+
+        </div>
       {/* Connection details dialog */}
       {selectedConnection && (
         <Dialog open={!!selectedConnection} onOpenChange={(open) => !open && setSelectedConnection(null)}>

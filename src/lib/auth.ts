@@ -9,6 +9,8 @@ const SPOTIFY_SCOPES = [
   'playlist-read-collaborative',
   'user-top-read',
   'user-read-recently-played',
+  'playlist-modify-public',
+  'playlist-modify-private',
 ].join(' ');
 
 async function refreshAccessToken(token: any): Promise<any> {

@@ -261,3 +261,41 @@ export async function getUserPublicPlaylistsWithTracks(userId: string): Promise<
   }
   return list;
 }
+
+// == Playlist creation ======================================================
+
+export async function createPlaylistForCurrentUser(
+  name: string,
+  isPublic: boolean,
+  description?: string,
+): Promise<{ id: string }> {
+  const me = await fetchSpotify('/me');
+  const userId = me?.id;
+  if (!userId) throw new Error('Failed to resolve current user id.');
+  const body = {
+    name,
+    public: isPublic,
+    description: description ?? 'Created by VibeScape',
+  } as any;
+  const created = await fetchSpotify(`/users/${userId}/playlists`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!created?.id) throw new Error('Failed to create playlist.');
+  return { id: created.id };
+}
+
+export async function addTracksToPlaylist(playlistId: string, trackIds: string[]): Promise<void> {
+  if (!Array.isArray(trackIds) || trackIds.length === 0) return;
+  const uris = trackIds.map(id => `spotify:track:${id}`);
+  // Spotify allows up to 100 URIs per request
+  for (let i = 0; i < uris.length; i += 100) {
+    const chunk = uris.slice(i, i + 100);
+    await fetchSpotify(`/playlists/${playlistId}/tracks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris: chunk }),
+    });
+  }
+}
