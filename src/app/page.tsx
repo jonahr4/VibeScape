@@ -25,7 +25,7 @@ export default async function Home() {
   const session = await getServerSession(authOptions);
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <header className="p-4 md:p-5 shrink-0 sticky top-0 z-10 bg-card/60 backdrop-blur supports-[backdrop-filter]:bg-card/40 border-b border-white/10">
+      <header className="p-3 md:p-4 shrink-0 sticky top-0 z-10 bg-card/60 backdrop-blur supports-[backdrop-filter]:bg-card/40 border-b border-white/10">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-primary font-headline tracking-tight">VibeScape</h1>
@@ -34,7 +34,7 @@ export default async function Home() {
           <SignInButton />
         </div>
       </header>
-      <main className="flex-1 p-4 md:p-8">
+      <main className="flex-1 p-3 md:p-4 flex flex-col min-h-0">
         {!session ? (
           <div className="min-h-[60vh] flex items-center justify-center">
             <div className="text-center space-y-4">
@@ -46,14 +46,14 @@ export default async function Home() {
             </div>
           </div>
         ) : (
-        <Tabs defaultValue="song-map" className="w-full">
+        <Tabs defaultValue="song-map" className="w-full h-full flex flex-col min-h-0">
           <TabsList className="grid w-full grid-cols-3 md:w-[600px] mx-auto">
             <TabsTrigger value="song-map"><Music className="mr-2 h-4 w-4" />Song Map</TabsTrigger>
             <TabsTrigger value="playlist-chooser"><Star className="mr-2 h-4 w-4" />Playlist Chooser</TabsTrigger>
             <TabsTrigger value="top-songs"><TrendingUp className="mr-2 h-4 w-4" />Top Songs</TabsTrigger>
           </TabsList>
-          <TabsContent value="song-map" className="mt-6">
-            <div className="max-w-6xl mx-auto">
+          <TabsContent value="song-map" className="mt-3 flex-1 min-h-0">
+            <div className="w-full h-full">
               <Suspense fallback={<LoadingScreen messages={["Loading your favorite hits…","Analyzing your connections…","Creating the graph…"]} /> }>
                 <SongMap />
               </Suspense>

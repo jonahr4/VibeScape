@@ -5,7 +5,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
-import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown, ChevronDown, Users, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Minus, Maximize, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown, ChevronDown, Users, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -65,6 +65,7 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 
 const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState<string>('60vh');
   const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 0.2 });
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState<Vector2D>({ x: 0, y: 0 });
@@ -206,6 +207,28 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
         setStagedSelectedPlaylists(initialState);
     }
   }, [allPlaylists]);
+
+  // Dynamically size the graph so its bottom sits ~50px above the window bottom
+  useEffect(() => {
+    const updateHeight = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const top = rect.top;
+      const target = Math.max(360, window.innerHeight - top - 50);
+      setContainerHeight(`${target}px`);
+    };
+    // initial and on resize
+    updateHeight();
+    const onResize = () => updateHeight();
+    window.addEventListener('resize', onResize);
+    // adjust after paint for any layout shifts
+    const raf = requestAnimationFrame(updateHeight);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [initializedCounts, setInitializedCounts] = useState(false);
@@ -512,7 +535,8 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   return (
     <div 
       ref={containerRef}
-      className="relative w-full h-[60vh] bg-card overflow-hidden cursor-grab active:cursor-grabbing"
+      className="relative w-full bg-card overflow-hidden cursor-grab active:cursor-grabbing overscroll-contain"
+      style={{ height: containerHeight, minHeight: 360 }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -669,49 +693,6 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
             </SheetFooter>
           </SheetContent>
         </Sheet>
-         <Dialog>
-          <DialogTrigger asChild>
-            <Button size="icon" variant="secondary"><Info /></Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>How to Read the Song Map</DialogTitle>
-              <DialogDescription>
-                This visualization helps you discover connections in your music library. Here's what everything means:
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 text-sm text-muted-foreground">
-                <div className="flex items-start gap-4">
-                    <div className="w-8 h-8 rounded-full bg-primary/20 flex-shrink-0 mt-1"></div>
-                    <div>
-                        <h3 className="font-semibold text-foreground">Playlists</h3>
-                        <p>The large, colored circles represent your playlists. Songs are clustered around the playlists they belong to. Click a playlist to see its songs.</p>
-                    </div>
-                </div>
-                 <div className="flex items-start gap-4">
-                    <Music className="w-8 h-8 text-primary flex-shrink-0 mt-1" />
-                    <div>
-                        <h3 className="font-semibold text-foreground">Songs</h3>
-                        <p>The smaller circles with album art are individual songs. Hover over a song to see its name and artist. Click a song to highlight its connections.</p>
-                    </div>
-                </div>
-                 <div className="flex items-start gap-4">
-                    <Star className="w-8 h-8 text-primary flex-shrink-0 mt-1" />
-                    <div>
-                        <h3 className="font-semibold text-foreground">Song Popularity</h3>
-                        <p>The size of a song's circle is determined by its popularity on Spotify. Bigger circles mean more popular songs.</p>
-                    </div>
-                </div>
-                 <div className="flex items-start gap-4">
-                    <GitBranch className="w-8 h-8 text-primary flex-shrink-0 mt-1" />
-                    <div>
-                        <h3 className="font-semibold text-foreground">Connections</h3>
-                        <p>Lines are drawn between songs that appear in the same playlist, revealing the musical fabric connecting your tracks.</p>
-                    </div>
-                </div>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
       <div className="absolute top-2 right-2 z-20 w-64" data-filter-card>
