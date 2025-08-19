@@ -5,7 +5,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
-import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown, ChevronDown, Users, Loader2 } from 'lucide-react';
+import { Plus, Minus, Maximize, Info, Music, GitBranch, Star, ListMusic, RefreshCw, Filter, Search, ArrowUp, ArrowDown, ChevronDown, Users, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -73,6 +73,7 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
   const [selectedConnection, setSelectedConnection] = useState<ConnectionSelection | null>(null);
   const EDGE_HITBOX_MULTIPLIER = 5;
   const { toast: showToast } = useToast();
+  const { data: session } = useSession();
 
   // State for sorting and filtering playlists
   const [sortKey, setSortKey] = useState<SortKey>('lastModified');
@@ -1138,7 +1139,18 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                   const expanded = !!expandedSelected[id];
                   return (
                     <div key={id} className="border rounded-md p-3 bg-card/30">
-                      <button className="w-full flex items-center justify-between text-left" onClick={() => setExpandedSelected(prev=>({ ...prev, [id]: !prev[id] }))}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="w-full flex items-center justify-between text-left"
+                        onClick={() => setExpandedSelected(prev=>({ ...prev, [id]: !prev[id] }))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setExpandedSelected(prev=>({ ...prev, [id]: !prev[id] }));
+                          }
+                        }}
+                      >
                         <div className="flex items-center gap-3">
                           <Image src={s.albumArt || 'https://placehold.co/64x64.png'} alt={s.name} width={48} height={48} className="rounded" />
                           <div>
@@ -1146,17 +1158,48 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                             <div className="text-sm text-muted-foreground">{s.artist}</div>
                           </div>
                         </div>
-                        <ChevronDown className={cn("h-4 w-4 transition-transform", expanded ? "rotate-180" : "rotate-0")} />
-                      </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                            title="Remove from selected"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSongIds(prev => {
+                                const next = new Set(prev);
+                                next.delete(id);
+                                return next;
+                              });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                          <ChevronDown className={cn("h-4 w-4 transition-transform", expanded ? "rotate-180" : "rotate-0")} />
+                        </div>
+                      </div>
                       {expanded && (
                         <div className="mt-3 pl-12 space-y-1 text-sm">
-                          {inPlaylists.map(p => (
-                            <div key={p.id} className="flex items-center gap-2">
-                              <Image src={p.albumArt || 'https://placehold.co/24x24.png'} alt={p.name} width={20} height={20} className="rounded" />
-                              <span className="truncate">{p.name}</span>
-                              <span className="text-muted-foreground">— {(extraPlaylists.find(ep=>ep.id===p.id) ? 'Friend' : 'You')}</span>
-                            </div>
-                          ))}
+                          {inPlaylists.map(p => {
+                            const isFriendPl = friendPlaylistIds.has(p.id) || !!extraPlaylists.find(ep => ep.id === p.id);
+                            let ownerLabel = 'You';
+                            if (isFriendPl) {
+                              // Find the friend (owner) name for this playlist id, if available
+                              let foundName: string | undefined;
+                              for (const [fid, pls] of Object.entries(friendPlaylists)) {
+                                if (pls?.some(fp => fp.id === p.id)) {
+                                  foundName = friends.find(fr => fr.id === fid)?.name;
+                                  break;
+                                }
+                              }
+                              ownerLabel = foundName || 'Friend';
+                            }
+                            return (
+                              <div key={p.id} className="flex items-center gap-2">
+                                <Image src={p.albumArt || 'https://placehold.co/24x24.png'} alt={p.name} width={20} height={20} className="rounded" />
+                                <span className="truncate">{p.name}</span>
+                                <span className="text-muted-foreground">— {ownerLabel}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -1175,7 +1218,27 @@ const SongMapClient = ({ allPlaylists, allSongs }: SongMapClientProps) => {
                   return (extraPlaylists||[]).some(pl => s.playlists.includes(pl.id));
                 });
                 if (hasFriend) {
-                  setCreateName('User 1 and User 2 Blend Created By VibeScape');
+                  const myName = session?.user?.name || 'You';
+                  const friendIdsSet = new Set<string>();
+                  for (const id of Array.from(selectedSongIds)) {
+                    const s = songs.find(x => x.id === id) || allCombinedPlaylists.flatMap(p=>p.tracks).find(x=>x.id===id);
+                    if (!s) continue;
+                    for (const [fid, pls] of Object.entries(friendPlaylists)) {
+                      if (pls?.some(fp => s.playlists.includes(fp.id))) {
+                        friendIdsSet.add(fid);
+                      }
+                    }
+                  }
+                  const friendNames = Array.from(friendIdsSet).map(fid => friends.find(fr => fr.id === fid)?.name || 'Friend');
+                  let friendLabel = 'Friend';
+                  if (friendNames.length === 1) {
+                    friendLabel = friendNames[0];
+                  } else if (friendNames.length === 2) {
+                    friendLabel = `${friendNames[0]} and ${friendNames[1]}`;
+                  } else if (friendNames.length > 2) {
+                    friendLabel = `${friendNames[0]} and ${friendNames.length - 1} others`;
+                  }
+                  setCreateName(`${myName} and ${friendLabel} Blend Created By VibeScape`);
                 } else {
                   const today = new Date();
                   const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;

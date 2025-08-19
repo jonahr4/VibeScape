@@ -275,6 +275,7 @@ export async function createPlaylistForCurrentUser(
   const body = {
     name,
     public: isPublic,
+    collaborative: false,
     description: description ?? 'Created by VibeScape',
   } as any;
   const created = await fetchSpotify(`/users/${userId}/playlists`, {
@@ -283,6 +284,16 @@ export async function createPlaylistForCurrentUser(
     body: JSON.stringify(body),
   });
   if (!created?.id) throw new Error('Failed to create playlist.');
+  // Enforce privacy explicitly in case creation endpoint ignores default/privacy settings.
+  try {
+    await fetchSpotify(`/playlists/${created.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ public: isPublic }),
+    });
+  } catch (e) {
+    // Non-fatal; proceed with created playlist even if enforcement fails.
+  }
   return { id: created.id };
 }
 

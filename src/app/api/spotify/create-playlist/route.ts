@@ -5,7 +5,9 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const name: string = body?.name;
-    const isPublic: boolean = !!body?.isPublic;
+    // Be strict: only boolean true or string 'true' should be public
+    const rawIsPublic = body?.isPublic;
+    const isPublic: boolean = rawIsPublic === true || rawIsPublic === 'true';
     const trackIds: string[] = Array.isArray(body?.trackIds) ? body.trackIds : [];
     if (!name || trackIds.length === 0) {
       return NextResponse.json({ error: 'Missing name or trackIds' }, { status: 400 });
@@ -19,4 +21,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: e?.message ?? 'Failed to create playlist' }, { status: 500 });
   }
 }
-
