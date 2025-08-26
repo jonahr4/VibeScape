@@ -2,6 +2,10 @@
 
 VibeScape is a Next.js app that turns your Spotify library into an interactive map, compares your playlists with friends, and ranks your top songs with a personal scoring model. Built by a Jonah Rothman to showcase product thinking, analytical, and modern full‑stack skills. Created with the assistance of Google Firebase studio and OpenAI Codex
 
+## DEMO
+[![VibeScape DEMO Summer 2025](https://img.youtube.com/vi/t3ctIOSU4p0/0.jpg)](https://youtu.be/t3ctIOSU4p0)
+
+
 ## Quick Start Locally
 
 1) Prereqs
